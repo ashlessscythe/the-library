@@ -1,17 +1,23 @@
 import { useEffect } from "react";
 import type { MoveDirection } from "@the-library/core";
 
+/**
+ * ←/→ pages · A/D books · W/S shelves · Q/E walls ·
+ * PageUp/PageDown floor · Home/End room (hex)
+ */
 const MAP: Record<string, MoveDirection> = {
-  w: "up",
-  ArrowUp: "up",
-  s: "down",
-  ArrowDown: "down",
-  a: "left",
-  d: "right",
-  e: "forward",
-  q: "back",
-  ArrowRight: "pageNext",
   ArrowLeft: "pagePrev",
+  ArrowRight: "pageNext",
+  a: "back",
+  d: "forward",
+  w: "up",
+  s: "down",
+  q: "left",
+  e: "right",
+  PageUp: "floorUp",
+  PageDown: "floorDown",
+  Home: "roomPrev",
+  End: "roomNext",
 };
 
 export function useTravelKeys(

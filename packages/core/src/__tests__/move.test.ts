@@ -40,4 +40,21 @@ describe("lattice travel", () => {
       moved
     );
   });
+
+  it("steps room and floor without changing wall/shelf/book/page", () => {
+    // room "a" = 10 in base-32
+    const base = parseIdentifier("a.2.3.4.5");
+    const nextRoom = moveCoordinate(base, "roomNext");
+    expect(nextRoom.room).toBe(11n);
+    expect(nextRoom.wall).toBe(2);
+    expect(nextRoom.shelf).toBe(3);
+
+    const prevRoom = moveCoordinate(base, "roomPrev");
+    expect(prevRoom.room).toBe(9n);
+
+    const up = moveCoordinate(base, "floorUp");
+    expect(up.room).toBe(16n);
+    const down = moveCoordinate(base, "floorDown");
+    expect(down.room).toBe(4n);
+  });
 });

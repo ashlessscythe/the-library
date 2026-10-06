@@ -1,28 +1,41 @@
 import type { TravelCoordinate } from "@the-library/core";
 import { formatIdentifier, parseIdentifier } from "@the-library/core";
+import { ensureRoomKey, resolveRoom } from "@/lib/rooms";
 
 export function bookPath(coord: {
-  roomString: string;
+  roomKey: string;
   wall: number;
   shelf: number;
   book: number;
   page: number;
 }): string {
-  return `/book/${encodeURIComponent(coord.roomString)}/wall/${coord.wall}/shelf/${coord.shelf}/book/${coord.book}/page/${coord.page}`;
+  // roomKey is already short (literal or @hash) — never put megabyte rooms in the path
+  const roomSeg = encodeURIComponent(coord.roomKey);
+  return `/book/${roomSeg}/wall/${coord.wall}/shelf/${coord.shelf}/book/${coord.book}/page/${coord.page}`;
 }
 
-export function bookPathFromIdentifier(identifier: string): string {
-  return bookPath(parseIdentifier(identifier));
+/** Build a short shareable reader URL (hashes long rooms). */
+export async function bookPathFromIdentifier(identifier: string): Promise<string> {
+  const parsed = parseIdentifier(identifier);
+  const roomKey = await ensureRoomKey(parsed.roomString);
+  return bookPath({
+    roomKey,
+    wall: parsed.wall,
+    shelf: parsed.shelf,
+    book: parsed.book,
+    page: parsed.page,
+  });
 }
 
-export function identifierFromParams(params: {
+/** Resolve route params to a full generate-able identifier. */
+export async function resolveIdentifierFromParams(params: {
   room?: string;
   wall?: string;
   shelf?: string;
   book?: string;
   page?: string;
-}): string {
-  const room = decodeURIComponent(params.room ?? "1");
+}): Promise<string> {
+  const room = await resolveRoom(params.room ?? "1");
   return formatIdentifier(
     room,
     Number(params.wall ?? 1),

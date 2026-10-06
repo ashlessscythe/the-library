@@ -12,8 +12,9 @@ export function Random() {
     if (!ready) return;
     let cancelled = false;
     random()
-      .then((id) => {
-        if (!cancelled) navigate(bookPathFromIdentifier(id), { replace: true });
+      .then(async (id) => {
+        const path = await bookPathFromIdentifier(id);
+        if (!cancelled) navigate(path, { replace: true });
       })
       .catch((e: Error) => {
         if (!cancelled) setStatus(e.message);

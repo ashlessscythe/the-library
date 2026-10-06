@@ -92,12 +92,19 @@ a:hover {
   object-position: center;
 }
 
+.reader-stage {
+  container-type: inline-size;
+  container-name: reader;
+}
+
 .page-lines {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  word-break: break-all;
+  /* Fill the reader column: ~84 monospace cells (line # + gap + 80 chars). */
+  font-size: clamp(0.7rem, calc((100cqw - 2.5rem) / 84), 1.15rem);
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+  width: 100%;
 }
 
 @keyframes hud-pulse {

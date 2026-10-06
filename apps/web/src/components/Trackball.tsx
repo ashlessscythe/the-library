@@ -1,5 +1,6 @@
 import { useCallback, useRef } from "react";
 import type { MoveDirection } from "@the-library/core";
+import { KeyMapDiagram } from "@/components/KeyMapDiagram";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -11,8 +12,7 @@ const THRESHOLD = 36;
 
 /**
  * Virtual trackball: drag emits discrete lattice steps with hysteresis.
- * Axes: horizontal → left/right (wall), vertical → up/down (shelf),
- * diagonal-forward feel via buttons for book steps.
+ * Horizontal → wall (Q/E) · Vertical → shelf (W/S)
  */
 export function Trackball({ onMove, className }: Props) {
   const origin = useRef<{ x: number; y: number } | null>(null);
@@ -49,11 +49,11 @@ export function Trackball({ onMove, className }: Props) {
   };
 
   return (
-    <div className={cn("flex flex-col items-center gap-3", className)}>
+    <div className={cn("flex flex-col items-center gap-4", className)}>
       <div
         role="application"
-        aria-label="Library trackball — drag to travel walls and shelves"
-        className="relative h-36 w-36 cursor-grab touch-none rounded-full border border-[var(--line)] bg-[var(--panel)] active:cursor-grabbing"
+        aria-label="Library trackball — drag for walls and shelves"
+        className="relative h-32 w-32 cursor-grab touch-none rounded-full border border-[var(--line)] bg-[var(--panel)] active:cursor-grabbing md:h-36 md:w-36"
         style={{
           backgroundImage:
             "radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--mark) 18%, transparent), transparent 55%), radial-gradient(circle at 50% 50%, var(--paper), var(--panel))",
@@ -67,25 +67,25 @@ export function Trackball({ onMove, className }: Props) {
           Travel
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2 font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
+
+      <div className="grid w-full max-w-[14rem] grid-cols-2 gap-2 font-mono text-[10px] uppercase tracking-wider text-[var(--muted)]">
         <button
           type="button"
           className="border border-[var(--line)] px-2 py-1 hover:border-[var(--mark)] hover:text-[var(--mark)]"
           onClick={() => onMove("back")}
         >
-          Q · Book−
+          A · Book−
         </button>
         <button
           type="button"
           className="border border-[var(--line)] px-2 py-1 hover:border-[var(--mark)] hover:text-[var(--mark)]"
           onClick={() => onMove("forward")}
         >
-          E · Book+
+          D · Book+
         </button>
       </div>
-      <p className="max-w-[12rem] text-center font-mono text-[10px] leading-relaxed text-[var(--dim)]">
-        WASD walls/shelves · Q/E books · ←/→ pages
-      </p>
+
+      <KeyMapDiagram />
     </div>
   );
 }

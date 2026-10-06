@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { MoveDirection, PageContent } from "@the-library/core";
 import { PAGES, shortenRoom } from "@the-library/core";
@@ -9,7 +9,7 @@ import { useTravelKeys } from "@/hooks/useTravelKeys";
 import { addBookmark } from "@/lib/bookmarks";
 import {
   bookPathFromIdentifier,
-  identifierFromParams,
+  resolveIdentifierFromParams,
 } from "@/lib/routes";
 
 function formatPageText(content: string): string {
@@ -17,22 +17,48 @@ function formatPageText(content: string): string {
   for (let i = 0; i < content.length; i += 80) {
     lines.push(content.slice(i, i + 80));
   }
-  return lines.map((line, idx) => `${String(idx + 1).padStart(2, " ")}  ${line}`).join("\n");
+  return lines
+    .map((line, idx) => `${String(idx + 1).padStart(2, " ")}  ${line}`)
+    .join("\n");
 }
 
 export function Reader() {
   const params = useParams();
   const navigate = useNavigate();
   const { ready, error: engineError, generatePage, move } = useLibraryEngine();
-  const identifier = useMemo(() => identifierFromParams(params), [params]);
+  const [identifier, setIdentifier] = useState<string | null>(null);
   const [page, setPage] = useState<PageContent | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hudKey, setHudKey] = useState(0);
   const [busyMove, setBusyMove] = useState(false);
 
+  // Resolve @hash → full room, then generate
   useEffect(() => {
-    if (!ready) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setIdentifier(null);
+    setPage(null);
+
+    resolveIdentifierFromParams(params)
+      .then((id) => {
+        if (!cancelled) setIdentifier(id);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) {
+          setError(e.message);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [params.room, params.wall, params.shelf, params.book, params.page]);
+
+  useEffect(() => {
+    if (!ready || !identifier) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -56,11 +82,11 @@ export function Reader() {
 
   const onMove = useCallback(
     async (direction: MoveDirection) => {
-      if (busyMove || !ready) return;
+      if (busyMove || !ready || !identifier) return;
       setBusyMove(true);
       try {
         const next = await move(identifier, direction);
-        navigate(bookPathFromIdentifier(next));
+        navigate(await bookPathFromIdentifier(next));
       } catch (e) {
         setError(e instanceof Error ? e.message : "Move failed");
       } finally {
@@ -70,13 +96,13 @@ export function Reader() {
     [busyMove, ready, move, identifier, navigate]
   );
 
-  useTravelKeys(ready && !loading, onMove);
+  useTravelKeys(ready && !loading && !!identifier, onMove);
 
   const roomShort = page ? shortenRoom(page.room) : "…";
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_11rem]">
-      <div className="space-y-6">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_13rem] md:gap-8 md:items-start">
+      <div className="reader-stage order-1 min-w-0 space-y-6">
         <div
           key={hudKey}
           className="hud-animate flex flex-wrap items-baseline justify-between gap-3 border-b border-[var(--line)] pb-4"
@@ -97,12 +123,31 @@ export function Reader() {
               type="button"
               size="sm"
               variant="outline"
-              onClick={() => addBookmark(identifier)}
+              disabled={!identifier}
+              onClick={() => {
+                if (!identifier) return;
+                void addBookmark(identifier);
+              }}
             >
               Bookmark
             </Button>
             <Button asChild size="sm" variant="ghost">
-              <Link to="/explore">Coordinates</Link>
+              <Link
+                to="/explore"
+                state={
+                  params.room
+                    ? {
+                        roomKey: decodeURIComponent(params.room),
+                        wall: Number(params.wall ?? 1),
+                        shelf: Number(params.shelf ?? 1),
+                        book: Number(params.book ?? 1),
+                        page: Number(params.page ?? 1),
+                      }
+                    : undefined
+                }
+              >
+                Coordinates
+              </Link>
             </Button>
           </div>
         </div>
@@ -115,7 +160,7 @@ export function Reader() {
           <p className="font-mono text-sm text-[var(--dim)]">Opening the volume…</p>
         ) : (
           <>
-            <pre className="page-lines border border-[var(--line)] bg-[var(--paper)] p-4 text-[var(--fg)]">
+            <pre className="page-lines w-full border border-[var(--line)] bg-[var(--paper)] p-4 text-[var(--fg)] sm:p-5">
               {formatPageText(page.content)}
             </pre>
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -132,9 +177,10 @@ export function Reader() {
                 <select
                   className="h-8 border border-[var(--line)] bg-[var(--panel)] px-2"
                   value={page.page}
-                  onChange={(e) => {
+                  onChange={async (e) => {
+                    if (!identifier) return;
                     const next = identifier.replace(/\.\d+$/, `.${e.target.value}`);
-                    navigate(bookPathFromIdentifier(next));
+                    navigate(await bookPathFromIdentifier(next));
                   }}
                 >
                   {Array.from({ length: PAGES }, (_, i) => i + 1).map((n) => (
@@ -157,7 +203,7 @@ export function Reader() {
         )}
       </div>
 
-      <aside className="lg:sticky lg:top-8 lg:self-start">
+      <aside className="order-2 flex justify-center md:sticky md:top-8 md:justify-start md:self-start">
         <Trackball onMove={onMove} />
       </aside>
     </div>

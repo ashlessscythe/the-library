@@ -15,16 +15,31 @@ import {
 } from "./identifier";
 
 export type MoveDirection =
-  | "up"
-  | "down"
-  | "left"
-  | "right"
-  | "forward"
-  | "back"
+  | "up" // shelf +
+  | "down" // shelf −
+  | "left" // wall −
+  | "right" // wall +
+  | "forward" // book +
+  | "back" // book −
   | "pageNext"
-  | "pagePrev";
+  | "pagePrev"
+  | "roomNext" // hex / room +1
+  | "roomPrev" // hex / room −1
+  | "floorUp" // vertical neighbor (room + FLOOR_STRIDE)
+  | "floorDown";
+
+/** Room step used for PageUp/PageDown “floor” travel (hex-stack metaphor). */
+export const FLOOR_STRIDE = 6;
 
 export type TravelCoordinate = LibraryCoordinate & { roomString: string };
+
+function withRoom(coord: TravelCoordinate, room: bigint): TravelCoordinate {
+  return {
+    ...coord,
+    room,
+    roomString: roomToBase32(room),
+  };
+}
 
 function wrapWall(wall: number): { wall: number; roomDelta: number } {
   if (wall < 1) return { wall: WALLS, roomDelta: -1 };
@@ -156,6 +171,14 @@ export function moveCoordinate(
       }
       return coordinateFromSequential(seq - 1n, PAGES);
     }
+    case "roomNext":
+      return withRoom(coord, applyRoomDelta(coord.room, 1));
+    case "roomPrev":
+      return withRoom(coord, applyRoomDelta(coord.room, -1));
+    case "floorUp":
+      return withRoom(coord, applyRoomDelta(coord.room, FLOOR_STRIDE));
+    case "floorDown":
+      return withRoom(coord, applyRoomDelta(coord.room, -FLOOR_STRIDE));
   }
 }
 

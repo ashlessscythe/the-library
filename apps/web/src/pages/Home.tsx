@@ -19,7 +19,7 @@ export function Home() {
     setStatus("Locating a volume…");
     try {
       const result = await search(query.trim().toLowerCase(), "empty");
-      navigate(bookPathFromIdentifier(result.identifier));
+      navigate(await bookPathFromIdentifier(result.identifier));
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Search failed");
     } finally {
@@ -28,7 +28,7 @@ export function Home() {
   };
 
   return (
-    <section className="flex min-h-[70vh] flex-col justify-center gap-10">
+    <section className="mx-auto flex min-h-[70vh] max-w-3xl flex-col justify-center gap-10">
       <div className="space-y-4">
         <h1 className="font-[family-name:var(--font-display)] text-6xl leading-none tracking-wide text-[var(--fg)] sm:text-7xl md:text-8xl">
           The Library

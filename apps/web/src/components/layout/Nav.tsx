@@ -16,7 +16,7 @@ export function Nav() {
 
   return (
     <header className="border-b border-[var(--line)]">
-      <div className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-4">
+      <div className="mx-auto flex w-full max-w-[96rem] items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
         <Link
           to="/"
           className="font-mono text-xs uppercase tracking-[0.25em] text-[var(--muted)] no-underline hover:text-[var(--mark)]"

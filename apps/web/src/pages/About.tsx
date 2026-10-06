@@ -23,8 +23,8 @@ export function About() {
           exists at that address; the surrounding pages are almost always noise.
         </p>
         <p>
-          Travel the lattice with the trackball or WASD: walls, shelves, and
-          books step along real coordinates. Arrow keys turn pages.
+          Travel with the trackball or keyboard: ←/→ pages, A/D books, W/S
+          shelves, Q/E walls, PageUp/Down floors, Home/End rooms.
         </p>
         <p className="font-mono text-sm text-[var(--dim)]">
           The Library is free software under GPL-3.0. Its mathematics are adapted

@@ -29,7 +29,7 @@ export function Search() {
     setError(null);
     try {
       const result = await search(query.trim().toLowerCase(), mode);
-      navigate(bookPathFromIdentifier(result.identifier));
+      navigate(await bookPathFromIdentifier(result.identifier));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {
