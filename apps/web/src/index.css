@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Cormorant Garamond", Georgia, serif;
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-bg: #0a0a0a;
+  --color-fg: #f2f0ea;
+  --color-muted: #9a958c;
+  --color-dim: #5c5850;
+  --color-line: #2a2824;
+  --color-panel: #141311;
+  --color-paper: #1a1916;
+  --color-mark: #e6c04a;
+  --color-accent: #e6c04a;
+}
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0a0a;
+  --fg: #f2f0ea;
+  --muted: #9a958c;
+  --dim: #5c5850;
+  --line: #2a2824;
+  --panel: #141311;
+  --paper: #1a1916;
+  --mark: #e6c04a;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f1ea;
+  --fg: #141210;
+  --muted: #5c564c;
+  --dim: #8a8378;
+  --line: #d4cec2;
+  --panel: #ebe6db;
+  --paper: #fffdf8;
+  --mark: #8a6a12;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-serif);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, color-mix(in srgb, var(--mark) 8%, transparent), transparent),
+    linear-gradient(180deg, var(--bg) 0%, color-mix(in srgb, var(--bg) 92%, #1a1510) 100%);
+  background-color: var(--bg);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--mark) 40%, transparent);
+  color: var(--fg);
+}
+
+a {
+  color: inherit;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+a:hover {
+  color: var(--mark);
+}
+
+.charcoal-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  filter: grayscale(1) contrast(1.35) brightness(1.05);
+  background: #f4f1ea;
+}
+
+.charcoal-art--banner {
+  max-height: 280px;
+  object-fit: cover;
+  object-position: center;
+}
+
+.page-lines {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+@keyframes hud-pulse {
+  from {
+    opacity: 0.35;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hud-animate {
+  animation: hud-pulse 280ms ease-out;
+}

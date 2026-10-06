@@ -1,0 +1,22 @@
+{
+  "name": "the-library",
+  "version": "1.0.0",
+  "private": true,
+  "license": "GPL-3.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @the-library/web",
+    "dev:api": "npm run dev -w @the-library/api",
+    "dev:all": "npm run dev -w @the-library/api & npm run dev -w @the-library/web",
+    "build": "npm run build -w @the-library/web && npm run build -w @the-library/api",
+    "test": "npm run test -w @the-library/core",
+    "test:heavy": "npm run test:heavy -w @the-library/core",
+    "start": "npm run start -w @the-library/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

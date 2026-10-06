@@ -1,0 +1,14 @@
+NOTICE — Derivative work under GPL-3.0
+
+The Library
+Copyright (C) 2026 ashlessscythe and contributors
+
+This program includes mathematics and coordinate algorithms adapted from
+babel — https://github.com/tdjsnelling/babel
+Copyright (C) Tom Snelling
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, version 3 of the License.
+
+See the LICENSE file for details.

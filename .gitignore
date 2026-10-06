@@ -1,0 +1,15 @@
+node_modules/
+dist/
+apps/web/public/font/
+
+*.tsbuildinfo
+.DS_Store
+.env
+.env.*
+!.env.example
+coverage/
+.vite/
+*.log
+leveldb/
+.idea/
+.vscode/
