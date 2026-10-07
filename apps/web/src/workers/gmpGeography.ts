@@ -598,7 +598,8 @@ function approximateSnapshotFromRoom(room: string): GeographySnapshot {
   const geoCompact = scientificFromLog10(log10Room);
   return {
     shellCompact,
-    levelCompact: "≈ ±shell",
+    // Bound only: |level| ≤ shell distance for any room on that shell.
+    levelCompact: `≈ ±${shellCompact}`,
     geoCompact,
     qCompact: "exact unrank deferred",
     rCompact: "exact unrank deferred",
