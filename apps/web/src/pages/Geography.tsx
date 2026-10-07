@@ -30,6 +30,7 @@ import {
   type PhysicalDirection,
   type PhysicalLocation,
 } from "@the-library/core";
+import { GeographyAbout } from "@/components/GeographyAbout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryEngine } from "@/hooks/useLibraryEngine";
@@ -299,7 +300,7 @@ export function Geography() {
       : null;
 
   return (
-    <article className="mx-auto max-w-3xl space-y-10">
+    <article className="mx-auto max-w-4xl space-y-10">
       <header className="space-y-4">
         <p className="font-mono text-xs uppercase tracking-[0.25em] text-[var(--dim)]">
           Place
@@ -425,6 +426,8 @@ export function Geography() {
           <p className="font-mono text-xs text-red-500">{error}</p>
         ) : null}
       </section>
+
+      <GeographyAbout />
 
       <div className="space-y-2">
         <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-[var(--dim)]">
