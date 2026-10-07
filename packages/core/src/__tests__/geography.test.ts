@@ -312,25 +312,22 @@ describe("distance and formatting", () => {
     expect(
       formatLibraryDistanceFromLog10Meters(log10Gpc + Math.log10(2))
     ).toMatch(/Gpc/);
-    expect(
-      formatLibraryDistanceFromLog10Meters(log10Gpc + Math.log10(2))
-    ).not.toMatch(/BEYOND COSMOLOGICAL SCALE/);
   });
 
-  it("formats megadigit shell distances beyond cosmological scale via log₁₀", () => {
-    // 1.14 × 10^114820 rooms × 1.25 m → scientific light-years + marker
+  it("formats megadigit shell distances as scientific Gpc via log₁₀", () => {
+    // 1.14 × 10^114820 rooms × 1.25 m → scientific Gpc (not light-years)
     const log10Shell = 114820 + Math.log10(1.14);
     const label = formatGridDistanceFromLog10Shell(log10Shell);
-    expect(label).toMatch(/light-years/);
-    expect(label).toMatch(/BEYOND COSMOLOGICAL SCALE/);
+    expect(label).toMatch(/Gpc/);
+    expect(label).not.toMatch(/light-years/);
     expect(label).toMatch(/\(grid\)/);
     expect(label).toMatch(/× 10/);
-    // Exponent should be ~114804 (shell log − log₁₀(ly) + log₁₀(1.25))
-    expect(label).toMatch(/10¹¹⁴⁸⁰/);
+    // Exponent ≈ shell log − log₁₀(Gpc) + log₁₀(1.25) → ~114794
+    expect(label).toMatch(/10¹¹⁴⁷⁹/);
 
     const fromBig = formatGridDistanceFromShell(10n ** 40n);
-    expect(fromBig).toMatch(/light-years/);
-    expect(fromBig).toMatch(/BEYOND COSMOLOGICAL SCALE/);
+    expect(fromBig).toMatch(/Gpc/);
+    expect(fromBig).not.toMatch(/light-years/);
     expect(fromBig).toMatch(/\(grid\)/);
 
     // Modest shell still escalates through AU
@@ -348,8 +345,8 @@ describe("distance and formatting", () => {
     };
     const block = formatPhysicalLocation(loc);
     expect(block).toContain("PHYSICAL DISTANCE");
-    expect(block).toMatch(/light-years/);
-    expect(block).toMatch(/BEYOND COSMOLOGICAL SCALE/);
+    expect(block).toMatch(/Gpc/);
+    expect(block).not.toMatch(/light-years/);
   });
 
   it("formats huge indices with scientific notation (no megabyte strings)", () => {

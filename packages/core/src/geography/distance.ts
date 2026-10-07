@@ -204,8 +204,8 @@ function toSuperscript(n: number): string {
 
 /**
  * Format a meter distance with automatic unit selection.
- * meters → km → AU → light-years → pc → kpc → Mpc → Gpc;
- * beyond readable Gpc → scientific light-years + BEYOND COSMOLOGICAL SCALE.
+ * meters → km → AU → light-years → pc → kpc → Mpc → Gpc
+ * (scientific Gpc for library-scale values past cosmological distance).
  */
 export function formatLibraryDistance(meters: number): string {
   if (!Number.isFinite(meters)) {
@@ -214,9 +214,6 @@ export function formatLibraryDistance(meters: number): string {
   if (meters === 0) return "0 m";
   return formatLibraryDistanceFromLog10Meters(Math.log10(Math.abs(meters)));
 }
-
-/** Max plain Gpc coefficient digits before falling back to scientific light-years. */
-const GPC_PLAIN_DIGIT_BUDGET = 6;
 
 /**
  * Same unit ladder as {@link formatLibraryDistance}, from log₁₀(meters).
@@ -263,12 +260,8 @@ export function formatLibraryDistanceFromLog10Meters(log10Meters: number): strin
   if (log10Meters < log10Gpc - 1) {
     return formatUnitFromLog10(log10Meters - log10Mpc, "Mpc", 6);
   }
-  // gigaparsecs while the coefficient stays plain / readable
-  if (log10Meters < log10Gpc + GPC_PLAIN_DIGIT_BUDGET) {
-    return formatUnitFromLog10(log10Meters - log10Gpc, "Gpc", GPC_PLAIN_DIGIT_BUDGET);
-  }
-  // Beyond readable Gpc: scientific light-years (no more obscure units).
-  return `${formatScientificMantissa(log10Meters - log10Ly)} light-years BEYOND COSMOLOGICAL SCALE`;
+  // gigaparsecs (scientific for distances past cosmological scale — never ly)
+  return formatUnitFromLog10(log10Meters - log10Gpc, "Gpc", 6);
 }
 
 /**
@@ -355,7 +348,7 @@ export function formatPhysicalLocation(location: PhysicalLocation): string {
   if (euc != null) {
     lines.push("", "PHYSICAL DISTANCE", formatLibraryDistance(euc));
   } else {
-    // Float-unsafe coords: shell × spacing still yields AU / ly via log₁₀.
+    // Float-unsafe coords: shell × spacing still yields AU / ly / Gpc via log₁₀.
     const shell = roomDistanceFromOrigin(location);
     lines.push("", "PHYSICAL DISTANCE", formatGridDistanceFromShell(shell));
   }
