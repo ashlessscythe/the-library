@@ -8,6 +8,7 @@ import {
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BASE32_ALPHA,
+  BOOK_LENGTH,
   babelRoomToPhysicalLocation,
   formatBearing,
   formatCompactBigInt,
@@ -22,7 +23,7 @@ import {
   parseBase32,
   physicalLocationToBabelRoom,
   physicalLocationToRoomIndex,
-  randomBigIntBelow,
+  randomRoomString,
   roomDistanceFromOrigin,
   roomIndexToPhysicalLocation,
   roomToBase32,
@@ -41,8 +42,6 @@ import type { GeographySnapshot } from "@/workers/library.worker";
 
 /** Manual Jump fields / sync BigInt path. Larger rooms use the GMP worker. */
 const INPUT_DIGIT_CAP = 256;
-/** Uniform random geo index bound — vast, but short enough for UI fields. */
-const RANDOM_GEO_MAX = 10n ** 36n;
 const ROOM_CHAR_RE = new RegExp(`[^${BASE32_ALPHA}]`, "gi");
 
 const HORIZONTAL: PhysicalDirection[] = ["NW", "N", "NE", "SW", "S", "SE"];
@@ -279,12 +278,28 @@ export function Geography() {
     }
   }
 
-  function jumpToRandom() {
+  async function jumpToRandom() {
+    if (busy || seeding) return;
+    setBusy(true);
+    setError(null);
     try {
-      const geoN = randomBigIntBelow(RANDOM_GEO_MAX);
-      applySyncLocation(roomIndexToPhysicalLocation(geoN));
+      // Length-uniform over [1, BOOK_LENGTH]: value-uniform sampling in [1, N]
+      // almost always lands on ~book-length ids (measure concentrates at the top).
+      const roomStr = randomRoomString(BOOK_LENGTH);
+      if (roomStr.length <= INPUT_DIGIT_CAP) {
+        const room = parseBase32(roomStr);
+        applySyncLocation(babelRoomToPhysicalLocation(room));
+        return;
+      }
+      if (!engineReady) {
+        throw new Error("Library engine is still loading — try again in a moment");
+      }
+      const snap = await geographySeed(roomStr);
+      applyLargeSnap(snap);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Random jump failed");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -573,15 +588,17 @@ export function Geography() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={jumpToRandom}
+                disabled={busy || seeding}
+                onClick={() => void jumpToRandom()}
               >
                 Jump to random
               </Button>
             </div>
             <p className="font-mono text-[10px] text-[var(--dim)]">
-              Random picks a crypto-uniform geography index out to 10³⁶. Search
-              rooms with million-digit ids locate automatically when opened from
-              Explore or the Reader.
+              Random picks a crypto room whose length is uniform from 1 through{" "}
+              {BOOK_LENGTH.toLocaleString("en-US")} characters (short, mid, and
+              book-scale are equally likely). Search rooms locate automatically
+              when opened from Explore or the Reader.
             </p>
           </form>
         </Disclosure>

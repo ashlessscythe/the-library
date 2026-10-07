@@ -18,6 +18,7 @@ import {
   PAGES,
   SHELVES,
   WALLS,
+  randomIdentifier,
   type MoveDirection,
   type PageContent,
 } from "@the-library/core";
@@ -333,25 +334,17 @@ export function gmpLookupContent(content: string, page: number): string {
   return identifier;
 }
 
+/**
+ * Length-uniform random identifier (same distribution as core
+ * {@link randomIdentifier} / Geography “Jump to random”).
+ * Value-uniform sampling over the book space almost always yields ~book-length
+ * room ids; length-uniform sampling spreads short → book-scale evenly.
+ */
 export function gmpRandomIdentifier(): string {
-  const g = gmp();
-  if (randState == null) throw new Error("RNG not initialised");
-
-  const uniqueBooks = g.mpz_t();
-  g.mpz_init(uniqueBooks);
-  g.mpz_set_ui(uniqueBooks, ALPHA.length);
-  g.mpz_pow_ui(uniqueBooks, uniqueBooks, BOOK_LENGTH);
-
-  const seq = g.mpz_t();
-  g.mpz_init(seq);
-  g.mpz_urandomm(seq, randState as never, uniqueBooks);
-  g.mpz_add_ui(seq, seq, 1);
-
-  const page = 1 + Math.floor(Math.random() * PAGES);
-  const identifier = identifierFromSeq(seq, page);
-
-  g.mpz_clears(seq, uniqueBooks);
-  return identifier;
+  // Engine must be ready (N/C/I loaded) before /random is offered, but room
+  // sampling no longer depends on those constants.
+  gmp();
+  return randomIdentifier();
 }
 
 export function gmpMoveIdentifier(

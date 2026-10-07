@@ -6,9 +6,13 @@
 
 import {
   ALPHA,
+  BASE32_ALPHA,
   BOOK_LENGTH,
+  BOOKS,
   PAGE_LENGTH,
   PAGES,
+  SHELVES,
+  WALLS,
 } from "../constants";
 import {
   coordinateFromSequential,
@@ -226,22 +230,52 @@ export function randomBigIntBelow(
 }
 
 /**
- * Random page identifier, uniform over the library (babel-v3).
- * Picks a sequential book index in `[1, N]` and a random page.
+ * Random Babel room string with length chosen uniformly in `[1, maxLength]`.
+ *
+ * Uniform-over-value sampling in `[1, N]` almost always yields ~`BOOK_LENGTH`
+ * digits (the measure concentrates at the top). Length-uniform sampling gives
+ * short, mid, and book-scale rooms with equal probability — no hard-coded
+ * target sizes.
+ *
+ * Remaining digits are crypto-uniform over the base-32 alphabet. The leading
+ * digit is chosen in `[1, 31]` (never `0`) so the room is always ≥ 1.
+ */
+export function randomRoomString(
+  maxLength: number = BOOK_LENGTH,
+  fillRandom: (bytes: Uint8Array) => void = fillCryptoRandom
+): string {
+  if (!Number.isInteger(maxLength) || maxLength < 1) {
+    throw new Error("maxLength must be an integer ≥ 1");
+  }
+  const length = 1 + Number(randomBigIntBelow(BigInt(maxLength), fillRandom));
+  const bytes = new Uint8Array(length);
+  fillRandom(bytes);
+  const chars = new Array<string>(length);
+  // Map 0–255 → 1–31; tiny modulo bias, never hangs on a zero-only fill.
+  chars[0] = BASE32_ALPHA[1 + (bytes[0] % 31)];
+  for (let i = 1; i < length; i++) {
+    chars[i] = BASE32_ALPHA[bytes[i] & 31];
+  }
+  return chars.join("");
+}
+
+/**
+ * Random page identifier (babel-v3).
+ *
+ * Room length is uniform in `[1, maxRoomLength]` (see {@link randomRoomString});
+ * wall / shelf / book / page are uniform over their geometry bounds.
+ * Value-uniform sampling over `[1, N]` is intentionally avoided — it almost
+ * always produces ~`BOOK_LENGTH`-digit rooms.
  */
 export function randomIdentifier(
   fillRandom: (bytes: Uint8Array) => void = fillCryptoRandom,
-  random: () => number = Math.random
+  random: () => number = Math.random,
+  maxRoomLength: number = BOOK_LENGTH
 ): string {
-  const { N } = getLibraryConstants();
-  const seq = randomBigIntBelow(N, fillRandom) + 1n;
+  const roomString = randomRoomString(maxRoomLength, fillRandom);
+  const wall = 1 + Math.floor(random() * WALLS);
+  const shelf = 1 + Math.floor(random() * SHELVES);
+  const book = 1 + Math.floor(random() * BOOKS);
   const page = 1 + Math.floor(random() * PAGES);
-  const coord = coordinateFromSequential(seq, page);
-  return formatIdentifier(
-    coord.roomString,
-    coord.wall,
-    coord.shelf,
-    coord.book,
-    coord.page
-  );
+  return formatIdentifier(roomString, wall, shelf, book, page);
 }
