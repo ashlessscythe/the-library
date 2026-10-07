@@ -24,6 +24,8 @@ import { buildEmptyBookContent, buildSpacePaddedBook } from "../search/build";
 describe("constants", () => {
   it("keeps babel-v3 geometry", () => {
     expect(ALPHA).toHaveLength(32);
+    // Hexagonal galleries: four shelved walls (two sides open).
+    expect(WALLS).toBe(4);
     expect(WALLS * SHELVES * BOOKS).toBe(BOOKS_PER_ROOM);
     expect(BOOKS_PER_ROOM).toBe(640);
     expect(BOOK_LENGTH).toBe(1_312_000);

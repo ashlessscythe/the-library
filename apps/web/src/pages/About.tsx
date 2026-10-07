@@ -13,8 +13,10 @@ export function About() {
       <div className="space-y-4 font-serif text-lg leading-relaxed text-[var(--muted)]">
         <p>
           In Jorge Luis Borges’ story, the universe is a library of hexagonal
-          galleries. Each wall holds five shelves of thirty-two books; each book
-          has four hundred and ten pages of forty lines of eighty characters.
+          galleries. Four of each hexagon’s six sides are lined with five shelves
+          of thirty-two books; the other two open onto neighboring galleries and
+          the air shafts. Each book has four hundred and ten pages of forty lines
+          of eighty characters.
         </p>
         <p>
           This site is an explorable recreation of that idea. Books are never

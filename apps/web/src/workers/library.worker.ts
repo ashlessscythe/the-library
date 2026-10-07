@@ -9,6 +9,7 @@ import {
   loadNumbersFromHexJson,
   lookupContent,
   moveIdentifier,
+  randomIdentifier,
   type MoveDirection,
   type PageContent,
 } from "@the-library/core";
@@ -44,16 +45,6 @@ let ready = false;
 
 function ensureReady() {
   if (!ready) throw new Error("Library engine not initialised");
-}
-
-function randomIdentifier(): string {
-  const wall = 1 + Math.floor(Math.random() * 4);
-  const shelf = 1 + Math.floor(Math.random() * 5);
-  const book = 1 + Math.floor(Math.random() * 32);
-  const page = 1 + Math.floor(Math.random() * 410);
-  // Modest random room for UX; full space is enormous.
-  const room = (1n + BigInt(Math.floor(Math.random() * 1_000_000))).toString(32);
-  return `${room}.${wall}.${shelf}.${book}.${page}`;
 }
 
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {

@@ -6,7 +6,7 @@ import { bookPathFromIdentifier } from "@/lib/routes";
 export function Random() {
   const navigate = useNavigate();
   const { ready, error, random } = useLibraryEngine();
-  const [status, setStatus] = useState("Choosing a page…");
+  const [status, setStatus] = useState("Choosing a page deep in the library…");
 
   useEffect(() => {
     if (!ready) return;

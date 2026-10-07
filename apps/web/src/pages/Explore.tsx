@@ -368,8 +368,9 @@ export function Explore() {
           className="charcoal-art charcoal-art--banner"
         />
         <p className="max-w-xl font-serif text-lg text-[var(--muted)]">
-          Enter coordinates within the hexagon. Invalid characters are stripped
-          as you type.
+          Enter coordinates within the hexagon — walls 1–{WALLS} are the shelved
+          sides (two sides stay open). Invalid characters are stripped as you
+          type.
           {seeded && (
             <span className="mt-2 block font-mono text-sm text-[var(--mark)]">
               Loaded from the page you were reading.
