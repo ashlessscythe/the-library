@@ -229,25 +229,48 @@ export function randomBigIntBelow(
   }
 }
 
+/** High-res U(0,1) for length draws (avoids `Math.random` / rejection loops). */
+function randomUnitInterval(
+  fillRandom: (bytes: Uint8Array) => void
+): number {
+  const bytes = new Uint8Array(7); // 56 bits → exact in IEEE floats
+  fillRandom(bytes);
+  let n = 0;
+  for (let i = 0; i < 7; i++) n = n * 256 + bytes[i];
+  return n / 0x1_0000_0000_0000_00; // 2^56
+}
+
 /**
- * Random Babel room string with length chosen uniformly in `[1, maxLength]`.
+ * Log-uniform room length in `[1, maxLength]`.
+ * Equal probability mass per order of magnitude — short, ~tens of thousands,
+ * and book-scale all appear in ordinary use. Value-uniform `[1, N]` (and even
+ * length-uniform over a million-wide range) concentrates on huge ids.
+ */
+export function randomRoomLength(
+  maxLength: number = BOOK_LENGTH,
+  fillRandom: (bytes: Uint8Array) => void = fillCryptoRandom
+): number {
+  if (!Number.isInteger(maxLength) || maxLength < 1) {
+    throw new Error("maxLength must be an integer ≥ 1");
+  }
+  if (maxLength === 1) return 1;
+  const u = randomUnitInterval(fillRandom);
+  // maxLength^u ∈ [1, maxLength]; clamp against float edge cases.
+  const length = Math.round(Math.pow(maxLength, u));
+  return Math.max(1, Math.min(maxLength, length));
+}
+
+/**
+ * Random Babel room string with log-uniform length in `[1, maxLength]`.
  *
- * Uniform-over-value sampling in `[1, N]` almost always yields ~`BOOK_LENGTH`
- * digits (the measure concentrates at the top). Length-uniform sampling gives
- * short, mid, and book-scale rooms with equal probability — no hard-coded
- * target sizes.
- *
- * Remaining digits are crypto-uniform over the base-32 alphabet. The leading
- * digit is chosen in `[1, 31]` (never `0`) so the room is always ≥ 1.
+ * Digits are crypto-uniform over the base-32 alphabet. The leading digit is
+ * chosen in `[1, 31]` (never `0`) so the room is always ≥ 1.
  */
 export function randomRoomString(
   maxLength: number = BOOK_LENGTH,
   fillRandom: (bytes: Uint8Array) => void = fillCryptoRandom
 ): string {
-  if (!Number.isInteger(maxLength) || maxLength < 1) {
-    throw new Error("maxLength must be an integer ≥ 1");
-  }
-  const length = 1 + Number(randomBigIntBelow(BigInt(maxLength), fillRandom));
+  const length = randomRoomLength(maxLength, fillRandom);
   const bytes = new Uint8Array(length);
   fillRandom(bytes);
   const chars = new Array<string>(length);
@@ -262,7 +285,7 @@ export function randomRoomString(
 /**
  * Random page identifier (babel-v3).
  *
- * Room length is uniform in `[1, maxRoomLength]` (see {@link randomRoomString});
+ * Room length is log-uniform in `[1, maxRoomLength]` (see {@link randomRoomString});
  * wall / shelf / book / page are uniform over their geometry bounds.
  * Value-uniform sampling over `[1, N]` is intentionally avoided — it almost
  * always produces ~`BOOK_LENGTH`-digit rooms.

@@ -283,7 +283,7 @@ export function Geography() {
     setBusy(true);
     setError(null);
     try {
-      // Length-uniform over [1, BOOK_LENGTH]: value-uniform sampling in [1, N]
+      // Log-uniform length in [1, BOOK_LENGTH]: value-uniform sampling in [1, N]
       // almost always lands on ~book-length ids (measure concentrates at the top).
       const roomStr = randomRoomString(BOOK_LENGTH);
       if (roomStr.length <= INPUT_DIGIT_CAP) {
@@ -595,10 +595,10 @@ export function Geography() {
               </Button>
             </div>
             <p className="font-mono text-[10px] text-[var(--dim)]">
-              Random picks a crypto room whose length is uniform from 1 through{" "}
-              {BOOK_LENGTH.toLocaleString("en-US")} characters (short, mid, and
-              book-scale are equally likely). Search rooms locate automatically
-              when opened from Explore or the Reader.
+              Random picks a crypto room with log-uniform length from 1 through{" "}
+              {BOOK_LENGTH.toLocaleString("en-US")} characters (orders of
+              magnitude are equally likely — short through book-scale). Search
+              rooms locate automatically when opened from Explore or the Reader.
             </p>
           </form>
         </Disclosure>

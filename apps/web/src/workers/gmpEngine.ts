@@ -335,10 +335,10 @@ export function gmpLookupContent(content: string, page: number): string {
 }
 
 /**
- * Length-uniform random identifier (same distribution as core
+ * Log-uniform-length random identifier (same distribution as core
  * {@link randomIdentifier} / Geography “Jump to random”).
  * Value-uniform sampling over the book space almost always yields ~book-length
- * room ids; length-uniform sampling spreads short → book-scale evenly.
+ * room ids; log-uniform length spreads short → book-scale across magnitudes.
  */
 export function gmpRandomIdentifier(): string {
   // Engine must be ready (N/C/I loaded) before /random is offered, but room

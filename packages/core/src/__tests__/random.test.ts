@@ -6,6 +6,7 @@ import { BASE32_ALPHA, BOOKS, PAGES, SHELVES, WALLS } from "../constants";
 import {
   randomBigIntBelow,
   randomIdentifier,
+  randomRoomLength,
   randomRoomString,
 } from "../generation/content";
 import { parseIdentifier } from "../coordinates/identifier";
@@ -61,7 +62,7 @@ describe("randomIdentifier", () => {
     expect(parsed.roomString.length).toBeLessThanOrEqual(48);
   });
 
-  it("varies room digit length under length-uniform sampling", () => {
+  it("varies room digit length under log-uniform sampling", () => {
     let counter = 0;
     const fill = (bytes: Uint8Array) => {
       for (let i = 0; i < bytes.length; i++) {
@@ -74,6 +75,38 @@ describe("randomIdentifier", () => {
       lengths.add(id.split(".")[0].length);
     }
     expect(lengths.size).toBeGreaterThan(1);
+  });
+});
+
+describe("randomRoomLength", () => {
+  it("stays in [1, maxLength] and spreads across magnitudes", () => {
+    let counter = 0;
+    const fill = (bytes: Uint8Array) => {
+      for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = (counter++ * 17 + 3) & 0xff;
+      }
+    };
+    const maxLength = 1_000_000;
+    let below1k = 0;
+    let between1kAnd100k = 0;
+    let above100k = 0;
+    for (let i = 0; i < 300; i++) {
+      const L = randomRoomLength(maxLength, fill);
+      expect(L).toBeGreaterThanOrEqual(1);
+      expect(L).toBeLessThanOrEqual(maxLength);
+      if (L < 1_000) below1k++;
+      else if (L < 100_000) between1kAnd100k++;
+      else above100k++;
+    }
+    // Log-uniform: each decade band should get hits in a few hundred draws.
+    expect(below1k).toBeGreaterThan(0);
+    expect(between1kAnd100k).toBeGreaterThan(0);
+    expect(above100k).toBeGreaterThan(0);
+  });
+
+  it("rejects invalid maxLength", () => {
+    expect(() => randomRoomLength(0)).toThrow(/maxLength/);
+    expect(() => randomRoomLength(1.5)).toThrow(/maxLength/);
   });
 });
 
@@ -105,23 +138,19 @@ describe("randomRoomString", () => {
     expect(lengths.size).toBeGreaterThan(1);
   });
 
-  it("can produce short and mid-length rooms under a controlled fill", () => {
+  it("maps u=0 toward length 1 and u→1 toward maxLength", () => {
     const shortFill = (bytes: Uint8Array) => {
       bytes.fill(0);
     };
+    expect(randomRoomLength(20, shortFill)).toBe(1);
     expect(randomRoomString(20, shortFill).length).toBe(1);
 
-    // Length draw: return 11 → room length 12.
-    const midFill = (bytes: Uint8Array) => {
-      bytes.fill(0);
-      if (bytes.length >= 1) bytes[bytes.length - 1] = 11;
+    // Unit interval ≈ 1 − ε → length near max.
+    const longFill = (bytes: Uint8Array) => {
+      bytes.fill(0xff);
     };
-    const mid = randomRoomString(20, midFill);
-    expect(mid.length).toBe(12);
-  });
-
-  it("rejects invalid maxLength", () => {
-    expect(() => randomRoomString(0)).toThrow(/maxLength/);
-    expect(() => randomRoomString(1.5)).toThrow(/maxLength/);
+    const L = randomRoomLength(20, longFill);
+    expect(L).toBeGreaterThan(10);
+    expect(L).toBeLessThanOrEqual(20);
   });
 });
