@@ -60,6 +60,11 @@ function formatSignedLevel(level: bigint): string {
   return formatCompactBigInt(level);
 }
 
+function formatRoomCharCount(n: number): string {
+  const count = n.toLocaleString("en-US");
+  return `${count} character${n === 1 ? "" : "s"} long`;
+}
+
 function Disclosure({
   title,
   children,
@@ -344,8 +349,8 @@ export function Geography() {
           {largeMode ? (
             <p className="font-mono text-[10px] text-[var(--dim)]">
               {largeSnap.exact
-                ? "Large room — exact place via the library engine (compact display)."
-                : "Book-scale room — shell distance estimated (exact hex unrank is deferred). Open the volume or reset to walk."}
+                ? `Large room (${formatRoomCharCount(largeSnap.babelRoomLength)}) — exact place via the library engine (compact display).`
+                : `Book-scale room (${formatRoomCharCount(largeSnap.babelRoomLength)}) — shell distance estimated (exact hex unrank is deferred). Open the volume or reset to walk.`}
             </p>
           ) : null}
         </div>

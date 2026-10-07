@@ -13,6 +13,8 @@ export type GeographySnapshot = {
   qCompact: string;
   rCompact: string;
   babelRoomShort: string;
+  /** Character length of the full Babel room base-32 id. */
+  babelRoomLength: number;
   bearing: string | null;
   physicalDistanceLabel: string | null;
   /** False when shell distance is log-estimated (book-scale rooms). */
@@ -576,6 +578,7 @@ function snapshotFromSession(g: Gmp): GeographySnapshot {
       qCompact: mpzCompact(g, q),
       rCompact: mpzCompact(g, r),
       babelRoomShort: shortenRoom(babelRoom),
+      babelRoomLength: babelRoom.length,
       bearing,
       physicalDistanceLabel,
       exact: true,
@@ -604,6 +607,7 @@ function approximateSnapshotFromRoom(room: string): GeographySnapshot {
     qCompact: "exact unrank deferred",
     rCompact: "exact unrank deferred",
     babelRoomShort: shortenRoom(room),
+    babelRoomLength: room.length,
     bearing: null,
     physicalDistanceLabel: null,
     exact: false,
