@@ -1,7 +1,11 @@
 import { Moon, Sun } from "lucide-react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/useTheme";
+import {
+  randomGeographyNavRoom,
+  type GeographyLocationState,
+} from "@/lib/geographyNav";
 import { cn } from "@/lib/utils";
 
 const links = [
@@ -14,6 +18,7 @@ const links = [
 
 export function Nav() {
   const { theme, toggle } = useTheme();
+  const navigate = useNavigate();
 
   return (
     <header className="border-b border-[var(--line)]">
@@ -29,6 +34,18 @@ export function Nav() {
             <NavLink
               key={link.to}
               to={link.to}
+              onClick={
+                link.to === "/geography"
+                  ? (e) => {
+                      e.preventDefault();
+                      navigate("/geography", {
+                        state: {
+                          roomKey: randomGeographyNavRoom(),
+                        } satisfies GeographyLocationState,
+                      });
+                    }
+                  : undefined
+              }
               className={({ isActive }) =>
                 cn(
                   "font-mono text-xs uppercase tracking-wider no-underline px-2 py-1",
