@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useLibraryEngine } from "@/hooks/useLibraryEngine";
 import { bookPathFromIdentifier } from "@/lib/routes";
+import { sanitizeSearchQuery } from "@/lib/searchText";
 
 export function Home() {
   const navigate = useNavigate();
@@ -14,11 +15,11 @@ export function Home() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!query.trim() || !ready) return;
+    const q = sanitizeSearchQuery(query).trim();
+    if (!q || !ready) return;
     setBusy(true);
     setStatus("Locating a volume…");
     try {
-      const q = query.trim().toLowerCase();
       const result = await search(q, "empty");
       navigate(await bookPathFromIdentifier(result.identifier), {
         state: { searchQuery: q },
@@ -45,9 +46,11 @@ export function Home() {
       <form onSubmit={onSubmit} className="max-w-xl space-y-3">
         <Textarea
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => setQuery(sanitizeSearchQuery(e.target.value))}
           placeholder="Type a sentence to locate…"
           aria-label="Search the library"
+          spellCheck={false}
+          autoComplete="off"
           rows={4}
         />
         <div className="flex flex-wrap gap-3">

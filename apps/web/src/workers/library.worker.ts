@@ -1,4 +1,6 @@
 import {
+  ALPHA,
+  PAGE_LENGTH,
   buildEmptyBookContent,
   buildEmptyPageBookContent,
   buildRandomCharsBookContent,
@@ -10,6 +12,17 @@ import {
   type MoveDirection,
   type PageContent,
 } from "@the-library/core";
+
+const SEARCH_ALLOWED = new Set(ALPHA);
+
+/** Mirror of apps/web sanitizeSearchQuery — keep lookup free of bad chars. */
+function sanitizeSearchContent(raw: string): string {
+  let out = "";
+  for (const ch of raw.replace(/\r\n?/g, "\n").toLowerCase()) {
+    if (ch === "\n" || SEARCH_ALLOWED.has(ch)) out += ch;
+  }
+  return out.slice(0, PAGE_LENGTH);
+}
 
 export type WorkerRequest =
   | { id: number; type: "init"; hexJson: string }
@@ -61,23 +74,24 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
       }
       case "search": {
         ensureReady();
+        const content = sanitizeSearchContent(msg.content);
         let book: string;
         let page = 1;
         let highlight: unknown = null;
         if (msg.mode === "emptybook") {
-          book = buildEmptyBookContent(msg.content);
+          book = buildEmptyBookContent(content);
           page = 1;
         } else if (msg.mode === "chars") {
-          const built = buildRandomCharsBookContent(msg.content);
+          const built = buildRandomCharsBookContent(content);
           book = built.book;
           highlight = built.highlight;
           page = Math.floor(built.highlight.startLine / 40) + 1;
         } else if (msg.mode === "space") {
-          const built = buildSpacePaddedBook(msg.content, 1);
+          const built = buildSpacePaddedBook(content, 1);
           book = built.book;
           page = built.page;
         } else {
-          const built = buildEmptyPageBookContent(msg.content);
+          const built = buildEmptyPageBookContent(content);
           book = built.book;
           page = built.page;
         }

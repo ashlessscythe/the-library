@@ -42,13 +42,67 @@ type LegacyBookmark = {
   /** Full room (export v2) or legacy roomKey field. */
   room?: string;
   roomKey?: string;
-  wall?: number;
-  shelf?: number;
-  book?: number;
-  page?: number;
+  wall?: number | string;
+  shelf?: number | string;
+  book?: number | string;
+  page?: number | string;
   label?: string;
   savedAt?: string;
 };
+
+/** Accept JSON numbers or numeric strings from hand-edited exports. */
+function coerceInt(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value)) return value;
+  if (typeof value === "string" && /^-?\d+$/.test(value.trim())) {
+    const n = Number(value.trim());
+    return Number.isInteger(n) ? n : null;
+  }
+  return null;
+}
+
+/**
+ * Resolve an imported coordinate's room from either a full base-32 code or an
+ * @hash slug (fields may appear as `room`, `roomKey`, or both).
+ * Full rooms are remembered in IndexedDB; hashes alone stay as slugs.
+ */
+async function resolveImportedRoomRef(
+  b: Pick<LegacyBookmark, "room" | "roomKey">
+): Promise<{ room: string; roomKey: string; hasFullRoom: boolean } | null> {
+  const roomField = typeof b.room === "string" ? b.room.trim() : "";
+  const keyField = typeof b.roomKey === "string" ? b.roomKey.trim() : "";
+
+  const fullFromRoom =
+    roomField && !isRoomHash(roomField)
+      ? normalizeRoomString(roomField)
+      : null;
+  const fullFromKey =
+    keyField && !isRoomHash(keyField)
+      ? normalizeRoomString(keyField)
+      : null;
+  const full = fullFromRoom ?? fullFromKey;
+
+  const hashFromKey = keyField && isRoomHash(keyField) ? keyField : null;
+  const hashFromRoom = roomField && isRoomHash(roomField) ? roomField : null;
+  const hash = hashFromKey ?? hashFromRoom;
+
+  if (full && full !== "0" && /^[0-9a-v]+$/.test(full)) {
+    // Prefer complete room — portable across devices; slug stays hashed.
+    const roomKey = await ensureRoomKey(full);
+    return { room: full, roomKey, hasFullRoom: true };
+  }
+
+  if (hash) {
+    try {
+      const room = await resolveRoom(hash);
+      return { room, roomKey: hash, hasFullRoom: true };
+    } catch {
+      // Unknown hash: keep the bookmark slug; cannot seed explore until resolved.
+      return { room: hash, roomKey: hash, hasFullRoom: false };
+    }
+  }
+
+  return null;
+}
 
 export function bookmarkLabel(b: {
   roomKey: string;
@@ -172,43 +226,36 @@ export async function migrateBookmarks(): Promise<Bookmark[]> {
   for (const b of raw) {
     if (
       typeof b.roomKey === "string" &&
-      typeof b.wall === "number" &&
+      coerceInt(b.wall) !== null &&
       !b.identifier &&
       !b.room
     ) {
       // Compact long literal rooms that slipped into localStorage.
       if (!isRoomHash(b.roomKey) && b.roomKey.length > 16) {
         try {
-          const roomKey = await ensureRoomKey(b.roomKey);
-          out.push({
-            id: b.id ?? crypto.randomUUID(),
-            roomKey,
-            wall: b.wall,
-            shelf: b.shelf!,
-            book: b.book!,
-            page: b.page!,
-            label: bookmarkLabel({
-              roomKey,
-              wall: b.wall,
-              shelf: b.shelf!,
-              book: b.book!,
-              page: b.page!,
-            }),
-            savedAt: b.savedAt ?? new Date().toISOString(),
-          });
-          changed = true;
+          const compacted = await compactImportedCoord(b);
+          if (compacted) {
+            out.push(compacted);
+            changed = true;
+          }
           continue;
         } catch {
           changed = true;
           continue;
         }
       }
-      const compact = normalizeBookmarkSync(b);
+      const compact = normalizeBookmarkSync({
+        ...b,
+        wall: coerceInt(b.wall) ?? undefined,
+        shelf: coerceInt(b.shelf) ?? undefined,
+        book: coerceInt(b.book) ?? undefined,
+        page: coerceInt(b.page) ?? undefined,
+      });
       if (compact) out.push(compact);
       continue;
     }
 
-    if (typeof b.room === "string" && typeof b.wall === "number") {
+    if (typeof b.room === "string" && coerceInt(b.wall) !== null) {
       try {
         const compacted = await compactImportedCoord(b);
         if (compacted) {
@@ -351,54 +398,33 @@ export async function exportLibraryJson(
 async function compactImportedCoord(
   b: LegacyBookmark
 ): Promise<Bookmark | null> {
-  if (
-    typeof b.wall !== "number" ||
-    typeof b.shelf !== "number" ||
-    typeof b.book !== "number" ||
-    typeof b.page !== "number"
-  ) {
+  const wall = coerceInt(b.wall);
+  const shelf = coerceInt(b.shelf);
+  const book = coerceInt(b.book);
+  const page = coerceInt(b.page);
+  if (wall === null || shelf === null || book === null || page === null) {
     return null;
   }
 
-  let roomKey: string;
-
-  if (typeof b.room === "string" && b.room.length > 0) {
-    // Prefer complete room from export — hash it; IDB holds the mapping.
-    if (isRoomHash(b.room)) {
-      roomKey = b.room;
-      // Ensure we can resolve later if only the hash was in `room`.
-      if (typeof b.roomKey === "string" && !isRoomHash(b.roomKey)) {
-        await ensureRoomKey(b.roomKey);
-      }
-    } else {
-      roomKey = await ensureRoomKey(b.room);
-    }
-  } else if (typeof b.roomKey === "string" && b.roomKey.length > 0) {
-    if (isRoomHash(b.roomKey)) {
-      roomKey = b.roomKey;
-    } else {
-      roomKey = await ensureRoomKey(b.roomKey);
-    }
-  } else {
-    return null;
-  }
+  const ref = await resolveImportedRoomRef(b);
+  if (!ref) return null;
 
   return {
     id: b.id ?? crypto.randomUUID(),
-    roomKey,
-    wall: b.wall,
-    shelf: b.shelf,
-    book: b.book,
-    page: b.page,
+    roomKey: ref.roomKey,
+    wall,
+    shelf,
+    book,
+    page,
     label:
       b.label && b.label.length < 120
         ? b.label
         : bookmarkLabel({
-            roomKey,
-            wall: b.wall,
-            shelf: b.shelf,
-            book: b.book,
-            page: b.page,
+            roomKey: ref.roomKey,
+            wall,
+            shelf,
+            book,
+            page,
           }),
     savedAt: b.savedAt ?? new Date().toISOString(),
   };
@@ -446,7 +472,7 @@ export async function importBookmarksJson(raw: string): Promise<ImportResult> {
       }
     } else if (
       (obj.room || obj.roomKey) &&
-      typeof obj.wall === "number"
+      coerceInt(obj.wall) !== null
     ) {
       incoming = [obj];
       currentRaw = obj;
@@ -513,10 +539,14 @@ export async function importBookmarksJson(raw: string): Promise<ImportResult> {
   saveBookmarks(out.slice(0, 100));
 
   let current: ImportResult["current"] = null;
-  if (currentRaw) {
-    current = await resolveImportedCurrent(currentRaw);
-  } else if (incoming.length === 1) {
-    current = await resolveImportedCurrent(incoming[0]!);
+  try {
+    if (currentRaw) {
+      current = await resolveImportedCurrent(currentRaw);
+    } else if (incoming.length === 1) {
+      current = await resolveImportedCurrent(incoming[0]!);
+    }
+  } catch {
+    current = null;
   }
 
   return { bookmarks: loadBookmarks(), current };
@@ -525,43 +555,25 @@ export async function importBookmarksJson(raw: string): Promise<ImportResult> {
 async function resolveImportedCurrent(
   b: LegacyBookmark
 ): Promise<ImportResult["current"]> {
-  if (
-    typeof b.wall !== "number" ||
-    typeof b.shelf !== "number" ||
-    typeof b.book !== "number" ||
-    typeof b.page !== "number"
-  ) {
+  const wall = coerceInt(b.wall);
+  const shelf = coerceInt(b.shelf);
+  const book = coerceInt(b.book);
+  const page = coerceInt(b.page);
+  if (wall === null || shelf === null || book === null || page === null) {
     return null;
   }
 
-  let room: string;
-  let roomKey: string;
-
-  if (typeof b.room === "string" && b.room.length > 0 && !isRoomHash(b.room)) {
-    room = normalizeRoomString(b.room);
-    roomKey = await ensureRoomKey(room);
-  } else if (typeof b.roomKey === "string" && b.roomKey.length > 0) {
-    if (isRoomHash(b.roomKey)) {
-      roomKey = b.roomKey;
-      room = await resolveRoom(roomKey);
-    } else {
-      room = normalizeRoomString(b.roomKey);
-      roomKey = await ensureRoomKey(room);
-    }
-  } else if (typeof b.room === "string" && isRoomHash(b.room)) {
-    roomKey = b.room;
-    room = await resolveRoom(roomKey);
-  } else {
-    return null;
-  }
+  const ref = await resolveImportedRoomRef(b);
+  // Need a real room string to seed Explore — hash-only without IDB cannot.
+  if (!ref || !ref.hasFullRoom) return null;
 
   return {
-    room,
-    roomKey,
-    wall: b.wall,
-    shelf: b.shelf,
-    book: b.book,
-    page: b.page,
+    room: ref.room,
+    roomKey: ref.roomKey,
+    wall,
+    shelf,
+    book,
+    page,
   };
 }
 
@@ -581,24 +593,30 @@ export function parseCurrentFromImport(raw: string): {
     }
     const obj = parsed as Partial<LibraryExport> & LegacyBookmark;
     const src = (obj.current ?? obj) as LegacyBookmark;
-    if (typeof src.wall !== "number") return null;
+    const wall = coerceInt(src.wall);
+    const shelf = coerceInt(src.shelf);
+    const book = coerceInt(src.book);
+    const page = coerceInt(src.page);
+    if (wall === null || shelf === null || book === null || page === null) {
+      return null;
+    }
     if (typeof src.room === "string" && !isRoomHash(src.room)) {
       return {
         room: src.room,
         roomKey: typeof src.roomKey === "string" ? src.roomKey : src.room.slice(0, 16),
-        wall: src.wall,
-        shelf: src.shelf!,
-        book: src.book!,
-        page: src.page!,
+        wall,
+        shelf,
+        book,
+        page,
       };
     }
     if (typeof src.roomKey === "string") {
       return {
         roomKey: src.roomKey,
-        wall: src.wall,
-        shelf: src.shelf!,
-        book: src.book!,
-        page: src.page!,
+        wall,
+        shelf,
+        book,
+        page,
       };
     }
     return null;
