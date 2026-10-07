@@ -5,6 +5,7 @@
 */
 
 export const ALPHA = "abcdefghijklmnopqrstuvwxyz.,!?- ";
+/** Shelved sides per hexagonal room (Borges: four of six; two sides open). */
 export const WALLS = 4;
 export const SHELVES = 5;
 export const BOOKS = 32;

@@ -36,7 +36,17 @@ export function normalizeRoomString(room: string): string {
   return r;
 }
 
-export function parseIdentifier(identifier: string): ParsedIdentifier {
+/**
+ * Split an identifier without parsing the room into a BigInt.
+ * Safe on JavaScriptCore (Safari) where megabyte rooms exceed the BigInt cap.
+ */
+export function splitIdentifier(identifier: string): {
+  roomString: string;
+  wall: number;
+  shelf: number;
+  book: number;
+  page: number;
+} {
   const parts = identifier.split(".");
   if (parts.length !== 5) {
     throw new Error("Identifier must be ROOM.WALL.SHELF.BOOK.PAGE");
@@ -46,14 +56,21 @@ export function parseIdentifier(identifier: string): ParsedIdentifier {
   if (!ROOM_RE.test(roomString)) {
     throw new Error("Room must be a base-32 string [0-9a-v]");
   }
+  if (roomString === "0") {
+    throw new Error("Room cannot be smaller than 1");
+  }
 
   const wall = Number(wallS);
   const shelf = Number(shelfS);
   const book = Number(bookS);
   const page = Number(pageS);
-
   assertBounds(wall, shelf, book, page);
 
+  return { roomString, wall, shelf, book, page };
+}
+
+export function parseIdentifier(identifier: string): ParsedIdentifier {
+  const { roomString, wall, shelf, book, page } = splitIdentifier(identifier);
   const room = parseBase32(roomString);
 
   if (room < 1n) {

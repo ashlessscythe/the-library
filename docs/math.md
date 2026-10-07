@@ -5,9 +5,11 @@ The Library maps each book coordinate to unique text using a modular bijection a
 ## Geometry
 
 - Alphabet: 32 characters (`a–z`, `.,!?-`, space)
-- Hex room: 4 walls × 5 shelves × 32 books = 640 books per room
+- Hexagonal room: 6 sides; **4 shelved walls** × 5 shelves × 32 books = 640 books per room (two sides are open — doorways / shafts)
 - Book: 410 pages × 40 lines × 80 characters = 1,312,000 characters
 - Identifier: `ROOM.WALL.SHELF.BOOK.PAGE` (room in base-32 `[0-9a-v]`)
+- Random: uniform sequential book index in `[1, N]`, plus a random page (full library depth)
+- Browser engine: `gmp-wasm` in the web worker (JavaScriptCore / Safari caps native BigInt at ~1M bits; `N` is ~6.5M bits)
 
 ## Sequential index
 

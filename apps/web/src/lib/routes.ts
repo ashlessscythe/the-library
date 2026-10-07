@@ -1,5 +1,9 @@
 import type { TravelCoordinate } from "@the-library/core";
-import { formatIdentifier, parseIdentifier } from "@the-library/core";
+import {
+  formatIdentifier,
+  parseIdentifier,
+  splitIdentifier,
+} from "@the-library/core";
 import { ensureRoomKey, resolveRoom } from "@/lib/rooms";
 
 export function bookPath(coord: {
@@ -16,7 +20,8 @@ export function bookPath(coord: {
 
 /** Build a short shareable reader URL (hashes long rooms). */
 export async function bookPathFromIdentifier(identifier: string): Promise<string> {
-  const parsed = parseIdentifier(identifier);
+  // splitIdentifier avoids BigInt-parsing megabyte rooms (Safari JSC cap).
+  const parsed = splitIdentifier(identifier);
   const roomKey = await ensureRoomKey(parsed.roomString);
   return bookPath({
     roomKey,

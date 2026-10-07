@@ -21,6 +21,13 @@ export default defineConfig({
     format: "es",
   },
   optimizeDeps: {
-    exclude: ["@the-library/core"],
+    exclude: ["@the-library/core", "gmp-wasm"],
+  },
+  build: {
+    // gmp-wasm ships a large embedded wasm payload; keep it external to the
+    // main bundle (worker imports it on its own chunk).
+    commonjsOptions: {
+      include: [/gmp-wasm/, /node_modules/],
+    },
   },
 });

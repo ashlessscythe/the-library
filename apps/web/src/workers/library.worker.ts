@@ -5,13 +5,16 @@ import {
   buildEmptyPageBookContent,
   buildRandomCharsBookContent,
   buildSpacePaddedBook,
-  generateContent,
-  loadNumbersFromHexJson,
-  lookupContent,
-  moveIdentifier,
   type MoveDirection,
   type PageContent,
 } from "@the-library/core";
+import {
+  gmpGeneratePage,
+  gmpLookupContent,
+  gmpMoveIdentifier,
+  gmpRandomIdentifier,
+  initGmpEngine,
+} from "./gmpEngine";
 
 const SEARCH_ALLOWED = new Set(ALPHA);
 
@@ -46,29 +49,19 @@ function ensureReady() {
   if (!ready) throw new Error("Library engine not initialised");
 }
 
-function randomIdentifier(): string {
-  const wall = 1 + Math.floor(Math.random() * 4);
-  const shelf = 1 + Math.floor(Math.random() * 5);
-  const book = 1 + Math.floor(Math.random() * 32);
-  const page = 1 + Math.floor(Math.random() * 410);
-  // Modest random room for UX; full space is enormous.
-  const room = (1n + BigInt(Math.floor(Math.random() * 1_000_000))).toString(32);
-  return `${room}.${wall}.${shelf}.${book}.${page}`;
-}
-
-self.onmessage = (event: MessageEvent<WorkerRequest>) => {
-  const msg = event.data;
+async function handleMessage(msg: WorkerRequest): Promise<void> {
   try {
     switch (msg.type) {
       case "init": {
-        loadNumbersFromHexJson(msg.hexJson);
+        // GMP avoids JSC's native BigInt size cap (Safari / iOS).
+        await initGmpEngine(msg.hexJson);
         ready = true;
         postMessage({ id: msg.id, ok: true, result: true } satisfies WorkerResponse);
         break;
       }
       case "generatePage": {
         ensureReady();
-        const page: PageContent = generateContent(msg.identifier, false);
+        const page: PageContent = gmpGeneratePage(msg.identifier);
         postMessage({ id: msg.id, ok: true, result: page } satisfies WorkerResponse);
         break;
       }
@@ -95,7 +88,7 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
           book = built.book;
           page = built.page;
         }
-        const identifier = lookupContent(book, page);
+        const identifier = gmpLookupContent(book, page);
         postMessage({
           id: msg.id,
           ok: true,
@@ -105,13 +98,13 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
       }
       case "move": {
         ensureReady();
-        const identifier = moveIdentifier(msg.identifier, msg.direction);
+        const identifier = gmpMoveIdentifier(msg.identifier, msg.direction);
         postMessage({ id: msg.id, ok: true, result: identifier } satisfies WorkerResponse);
         break;
       }
       case "random": {
         ensureReady();
-        const identifier = randomIdentifier();
+        const identifier = gmpRandomIdentifier();
         postMessage({ id: msg.id, ok: true, result: identifier } satisfies WorkerResponse);
         break;
       }
@@ -125,4 +118,8 @@ self.onmessage = (event: MessageEvent<WorkerRequest>) => {
       error: err instanceof Error ? err.message : String(err),
     } satisfies WorkerResponse);
   }
+}
+
+self.onmessage = (event: MessageEvent<WorkerRequest>) => {
+  void handleMessage(event.data);
 };

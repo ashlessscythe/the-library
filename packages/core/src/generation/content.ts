@@ -182,3 +182,66 @@ export function assertInverseIdentity(): void {
     throw new Error("C·I mod N !== 1 — numbers file invalid");
   }
 }
+
+/** Fill a buffer with CSPRNG bytes (chunked — browsers cap getRandomValues at 64KiB). */
+function fillCryptoRandom(bytes: Uint8Array): void {
+  const CHUNK = 65536;
+  for (let offset = 0; offset < bytes.length; offset += CHUNK) {
+    crypto.getRandomValues(bytes.subarray(offset, Math.min(offset + CHUNK, bytes.length)));
+  }
+}
+
+/** Fast Uint8Array → bigint via hex (byte-at-a-time shifts are O(n²)). */
+function bytesToBigInt(bytes: Uint8Array): bigint {
+  if (bytes.length === 0) return 0n;
+  // Build hex without a leading-zero-only edge case for BigInt('0x…').
+  let hex = "";
+  const HEX = "0123456789abcdef";
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    hex += HEX[b >> 4];
+    hex += HEX[b & 15];
+  }
+  return BigInt(`0x${hex}`);
+}
+
+/**
+ * Uniform random bigint in `[0, max)`.
+ * Rejection sampling keeps the distribution unbiased.
+ */
+export function randomBigIntBelow(
+  max: bigint,
+  fillRandom: (bytes: Uint8Array) => void = fillCryptoRandom
+): bigint {
+  if (max <= 0n) throw new Error("max must be positive");
+  const bits = max.toString(2).length;
+  const byteLength = Math.ceil(bits / 8);
+  const mask = (1n << BigInt(bits)) - 1n;
+  for (;;) {
+    const bytes = new Uint8Array(byteLength);
+    fillRandom(bytes);
+    const value = bytesToBigInt(bytes) & mask;
+    if (value < max) return value;
+  }
+}
+
+/**
+ * Random page identifier, uniform over the library (babel-v3).
+ * Picks a sequential book index in `[1, N]` and a random page.
+ */
+export function randomIdentifier(
+  fillRandom: (bytes: Uint8Array) => void = fillCryptoRandom,
+  random: () => number = Math.random
+): string {
+  const { N } = getLibraryConstants();
+  const seq = randomBigIntBelow(N, fillRandom) + 1n;
+  const page = 1 + Math.floor(random() * PAGES);
+  const coord = coordinateFromSequential(seq, page);
+  return formatIdentifier(
+    coord.roomString,
+    coord.wall,
+    coord.shelf,
+    coord.book,
+    coord.page
+  );
+}
