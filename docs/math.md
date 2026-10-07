@@ -35,3 +35,7 @@ Search does not scan. It builds a full book string containing the query (padding
 ## Travel
 
 WASD / trackball transforms stay on the lattice (wall, shelf, book, room). Page arrows walk sequential pages across book boundaries.
+
+## Physical geography
+
+Each Babel room also has a derived physical location on an infinite hex + level lattice (Entrance at Babel room 1 ↔ `(q,r,level) = (0,0,0)`). See [PHYSICAL_GEOGRAPHY.md](./PHYSICAL_GEOGRAPHY.md).

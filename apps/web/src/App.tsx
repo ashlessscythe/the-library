@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Shell } from "@/components/layout/Shell";
 import { About } from "@/pages/About";
+import { DevGeography } from "@/pages/DevGeography";
 import { Explore } from "@/pages/Explore";
 import { Home } from "@/pages/Home";
 import { Random } from "@/pages/Random";
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="explore" element={<Explore />} />
           <Route path="about" element={<About />} />
           <Route path="random" element={<Random />} />
+          <Route path="dev/geography" element={<DevGeography />} />
           <Route
             path="book/:room/wall/:wall/shelf/:shelf/book/:book/page/:page"
             element={<Reader />}
