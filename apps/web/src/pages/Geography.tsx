@@ -181,19 +181,21 @@ function FromTheEntrancePanel({
                   key={row.unit}
                   className={
                     on
-                      ? "text-[var(--mark)]"
-                      : "text-[var(--muted)]"
+                      ? "scale-active-row"
+                      : "border-l-2 border-transparent text-[var(--muted)]"
                   }
                 >
                   <th
                     scope="row"
-                    className={`py-0.5 pr-2 text-left font-normal uppercase tracking-wider ${
-                      on ? "text-[var(--mark)]" : "text-[var(--dim)]"
+                    className={`py-0.5 pr-2 pl-1.5 text-left uppercase tracking-wider ${
+                      on
+                        ? "font-semibold text-[var(--fg)]"
+                        : "font-normal text-[var(--dim)]"
                     }`}
                   >
                     {row.unit}
                   </th>
-                  <td className="min-w-0 py-0.5 break-words">{row.note}</td>
+                  <td className="min-w-0 py-0.5 pr-1 break-words">{row.note}</td>
                 </tr>
               );
             })}
