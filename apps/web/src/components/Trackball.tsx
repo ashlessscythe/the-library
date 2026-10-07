@@ -85,7 +85,7 @@ export function Trackball({ onMove, className }: Props) {
         </button>
       </div>
 
-      <KeyMapDiagram />
+      <KeyMapDiagram onMove={onMove} />
     </div>
   );
 }

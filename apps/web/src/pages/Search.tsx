@@ -28,8 +28,11 @@ export function Search() {
     setBusy(true);
     setError(null);
     try {
-      const result = await search(query.trim().toLowerCase(), mode);
-      navigate(await bookPathFromIdentifier(result.identifier));
+      const q = query.trim().toLowerCase();
+      const result = await search(q, mode);
+      navigate(await bookPathFromIdentifier(result.identifier), {
+        state: { searchQuery: q },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {

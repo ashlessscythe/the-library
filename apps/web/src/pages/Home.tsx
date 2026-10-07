@@ -18,8 +18,11 @@ export function Home() {
     setBusy(true);
     setStatus("Locating a volume…");
     try {
-      const result = await search(query.trim().toLowerCase(), "empty");
-      navigate(await bookPathFromIdentifier(result.identifier));
+      const q = query.trim().toLowerCase();
+      const result = await search(q, "empty");
+      navigate(await bookPathFromIdentifier(result.identifier), {
+        state: { searchQuery: q },
+      });
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Search failed");
     } finally {

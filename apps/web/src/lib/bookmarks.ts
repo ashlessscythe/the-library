@@ -1,5 +1,5 @@
-import { formatIdentifier, parseIdentifier } from "@the-library/core";
-import { ensureRoomKey, resolveRoom } from "@/lib/rooms";
+import { formatIdentifier, normalizeRoomString, parseIdentifier } from "@the-library/core";
+import { ensureRoomKey, isRoomHash, resolveRoom } from "@/lib/rooms";
 
 const KEY = "the-library-bookmarks";
 
@@ -15,7 +15,13 @@ export type Bookmark = {
   savedAt: string;
 };
 
+/**
+ * Portable coordinate for JSON files.
+ * `room` is always the complete base-32 room string (may be megabytes).
+ * `roomKey` is the URL/bookmark slug (short literal or @hash).
+ */
 export type CoordinateExport = {
+  room: string;
   roomKey: string;
   wall: number;
   shelf: number;
@@ -24,15 +30,17 @@ export type CoordinateExport = {
 };
 
 export type LibraryExport = {
-  version: 1;
+  version: 1 | 2;
   exportedAt: string;
   current: CoordinateExport | null;
-  bookmarks: Bookmark[];
+  bookmarks: CoordinateExport[];
 };
 
 type LegacyBookmark = {
   id?: string;
   identifier?: string;
+  /** Full room (export v2) or legacy roomKey field. */
+  room?: string;
   roomKey?: string;
   wall?: number;
   shelf?: number;
@@ -81,6 +89,8 @@ function normalizeBookmarkSync(b: LegacyBookmark): Bookmark | null {
     typeof b.book === "number" &&
     typeof b.page === "number"
   ) {
+    // Never hydrate megabyte rooms into React state from localStorage.
+    if (!isRoomHash(b.roomKey) && b.roomKey.length > 256) return null;
     return {
       id: b.id ?? crypto.randomUUID(),
       roomKey: b.roomKey,
@@ -163,11 +173,53 @@ export async function migrateBookmarks(): Promise<Bookmark[]> {
     if (
       typeof b.roomKey === "string" &&
       typeof b.wall === "number" &&
-      !b.identifier
+      !b.identifier &&
+      !b.room
     ) {
+      // Compact long literal rooms that slipped into localStorage.
+      if (!isRoomHash(b.roomKey) && b.roomKey.length > 16) {
+        try {
+          const roomKey = await ensureRoomKey(b.roomKey);
+          out.push({
+            id: b.id ?? crypto.randomUUID(),
+            roomKey,
+            wall: b.wall,
+            shelf: b.shelf!,
+            book: b.book!,
+            page: b.page!,
+            label: bookmarkLabel({
+              roomKey,
+              wall: b.wall,
+              shelf: b.shelf!,
+              book: b.book!,
+              page: b.page!,
+            }),
+            savedAt: b.savedAt ?? new Date().toISOString(),
+          });
+          changed = true;
+          continue;
+        } catch {
+          changed = true;
+          continue;
+        }
+      }
       const compact = normalizeBookmarkSync(b);
       if (compact) out.push(compact);
       continue;
+    }
+
+    if (typeof b.room === "string" && typeof b.wall === "number") {
+      try {
+        const compacted = await compactImportedCoord(b);
+        if (compacted) {
+          out.push(compacted);
+          changed = true;
+        }
+        continue;
+      } catch {
+        changed = true;
+        continue;
+      }
     }
 
     if (typeof b.identifier === "string") {
@@ -208,7 +260,7 @@ export async function migrateBookmarks(): Promise<Bookmark[]> {
   }
 
   // Always rewrite if any legacy identifier keys existed (purge huge strings)
-  if (changed || raw.some((b) => typeof b.identifier === "string")) {
+  if (changed || raw.some((b) => typeof b.identifier === "string" || typeof b.room === "string")) {
     saveBookmarks(out);
   }
   return out;
@@ -256,55 +308,148 @@ export async function toCoordinateExport(
   book: number,
   page: number
 ): Promise<CoordinateExport> {
-  const roomKey = await ensureRoomKey(room);
-  return { roomKey, wall, shelf, book, page };
+  const normalized = normalizeRoomString(room);
+  const roomKey = await ensureRoomKey(normalized);
+  return { room: normalized, roomKey, wall, shelf, book, page };
 }
 
-export function buildExportPayload(
-  current: CoordinateExport | null
-): LibraryExport {
+async function expandBookmarkToExport(b: Bookmark): Promise<CoordinateExport> {
+  const room = await resolveRoom(b.roomKey);
   return {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    current,
-    bookmarks: loadBookmarks(),
+    room,
+    roomKey: b.roomKey,
+    wall: b.wall,
+    shelf: b.shelf,
+    book: b.book,
+    page: b.page,
   };
 }
 
-export function exportLibraryJson(current: CoordinateExport | null): string {
-  return JSON.stringify(buildExportPayload(current), null, 2);
+export async function buildExportPayload(
+  current: CoordinateExport | null
+): Promise<LibraryExport> {
+  const bookmarks = loadBookmarks();
+  const expanded = await Promise.all(bookmarks.map(expandBookmarkToExport));
+  return {
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    current,
+    bookmarks: expanded,
+  };
 }
 
-export async function importBookmarksJson(raw: string): Promise<Bookmark[]> {
+export async function exportLibraryJson(
+  current: CoordinateExport | null
+): Promise<string> {
+  return JSON.stringify(await buildExportPayload(current), null, 2);
+}
+
+/**
+ * Turn an imported coordinate (hash and/or full room) into a compact bookmark.
+ * Full room strings are remembered in IndexedDB only — never localStorage.
+ */
+async function compactImportedCoord(
+  b: LegacyBookmark
+): Promise<Bookmark | null> {
+  if (
+    typeof b.wall !== "number" ||
+    typeof b.shelf !== "number" ||
+    typeof b.book !== "number" ||
+    typeof b.page !== "number"
+  ) {
+    return null;
+  }
+
+  let roomKey: string;
+
+  if (typeof b.room === "string" && b.room.length > 0) {
+    // Prefer complete room from export — hash it; IDB holds the mapping.
+    if (isRoomHash(b.room)) {
+      roomKey = b.room;
+      // Ensure we can resolve later if only the hash was in `room`.
+      if (typeof b.roomKey === "string" && !isRoomHash(b.roomKey)) {
+        await ensureRoomKey(b.roomKey);
+      }
+    } else {
+      roomKey = await ensureRoomKey(b.room);
+    }
+  } else if (typeof b.roomKey === "string" && b.roomKey.length > 0) {
+    if (isRoomHash(b.roomKey)) {
+      roomKey = b.roomKey;
+    } else {
+      roomKey = await ensureRoomKey(b.roomKey);
+    }
+  } else {
+    return null;
+  }
+
+  return {
+    id: b.id ?? crypto.randomUUID(),
+    roomKey,
+    wall: b.wall,
+    shelf: b.shelf,
+    book: b.book,
+    page: b.page,
+    label:
+      b.label && b.label.length < 120
+        ? b.label
+        : bookmarkLabel({
+            roomKey,
+            wall: b.wall,
+            shelf: b.shelf,
+            book: b.book,
+            page: b.page,
+          }),
+    savedAt: b.savedAt ?? new Date().toISOString(),
+  };
+}
+
+export type ImportResult = {
+  bookmarks: Bookmark[];
+  /** Ephemeral full room for seeding the explore form — not persisted as bookmark text. */
+  current: {
+    room: string;
+    roomKey: string;
+    wall: number;
+    shelf: number;
+    book: number;
+    page: number;
+  } | null;
+};
+
+/**
+ * Import bookmarks / coordinates from JSON.
+ * Accepts v2 (`room` full + `roomKey` hash), v1 (`roomKey` only), arrays,
+ * single coords, and legacy `{identifier}` rows.
+ * Full room strings are used ephemerally then compacted to @hash + IDB.
+ */
+export async function importBookmarksJson(raw: string): Promise<ImportResult> {
   const parsed: unknown = JSON.parse(raw);
   let incoming: LegacyBookmark[] = [];
+  let currentRaw: LegacyBookmark | null = null;
+  /** Full library exports replace stored bookmarks; single coords merge. */
+  let replaceAll = false;
 
   if (Array.isArray(parsed)) {
     incoming = parsed as LegacyBookmark[];
+    replaceAll = true;
   } else if (parsed && typeof parsed === "object") {
     const obj = parsed as Partial<LibraryExport> & LegacyBookmark & {
-      current?: CoordinateExport | null;
+      current?: LegacyBookmark | CoordinateExport | null;
     };
 
     if (Array.isArray(obj.bookmarks)) {
       incoming = obj.bookmarks as LegacyBookmark[];
-      if (obj.current?.roomKey) {
-        incoming = [
-          {
-            id: crypto.randomUUID(),
-            roomKey: obj.current.roomKey,
-            wall: obj.current.wall,
-            shelf: obj.current.shelf,
-            book: obj.current.book,
-            page: obj.current.page,
-            label: bookmarkLabel(obj.current),
-            savedAt: new Date().toISOString(),
-          },
-          ...incoming,
-        ];
+      replaceAll = true;
+      if (obj.current && typeof obj.current === "object") {
+        currentRaw = obj.current as LegacyBookmark;
       }
-    } else if (obj.roomKey && typeof obj.wall === "number") {
+    } else if (
+      (obj.room || obj.roomKey) &&
+      typeof obj.wall === "number"
+    ) {
       incoming = [obj];
+      currentRaw = obj;
     } else if (typeof obj.identifier === "string") {
       incoming = [obj];
     } else {
@@ -314,35 +459,146 @@ export async function importBookmarksJson(raw: string): Promise<Bookmark[]> {
     throw new Error("Invalid bookmark file");
   }
 
-  // Stash then migrate (handles legacy full identifiers)
-  localStorage.setItem(KEY, JSON.stringify(incoming));
-  return migrateBookmarks();
+  const out: Bookmark[] = [];
+  const seen = new Set<string>();
+
+  const pushUnique = (b: Bookmark) => {
+    const k = `${b.roomKey}|${b.wall}|${b.shelf}|${b.book}|${b.page}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(b);
+  };
+
+  if (!replaceAll) {
+    for (const b of loadBookmarks()) pushUnique(b);
+  }
+
+  if (currentRaw) {
+    const compacted = await compactImportedCoord(currentRaw);
+    if (compacted) pushUnique(compacted);
+  }
+
+  for (const b of incoming) {
+    if (typeof b.identifier === "string") {
+      try {
+        const parts = b.identifier.split(".");
+        if (parts.length !== 5) continue;
+        const [room, w, s, bk, p] = parts;
+        const roomKey = await ensureRoomKey(room);
+        pushUnique({
+          id: b.id ?? crypto.randomUUID(),
+          roomKey,
+          wall: Number(w),
+          shelf: Number(s),
+          book: Number(bk),
+          page: Number(p),
+          label: bookmarkLabel({
+            roomKey,
+            wall: Number(w),
+            shelf: Number(s),
+            book: Number(bk),
+            page: Number(p),
+          }),
+          savedAt: b.savedAt ?? new Date().toISOString(),
+        });
+      } catch {
+        /* skip */
+      }
+      continue;
+    }
+    const compacted = await compactImportedCoord(b);
+    if (compacted) pushUnique(compacted);
+  }
+
+  saveBookmarks(out.slice(0, 100));
+
+  let current: ImportResult["current"] = null;
+  if (currentRaw) {
+    current = await resolveImportedCurrent(currentRaw);
+  } else if (incoming.length === 1) {
+    current = await resolveImportedCurrent(incoming[0]!);
+  }
+
+  return { bookmarks: loadBookmarks(), current };
 }
 
-export function parseCurrentFromImport(raw: string): CoordinateExport | null {
+async function resolveImportedCurrent(
+  b: LegacyBookmark
+): Promise<ImportResult["current"]> {
+  if (
+    typeof b.wall !== "number" ||
+    typeof b.shelf !== "number" ||
+    typeof b.book !== "number" ||
+    typeof b.page !== "number"
+  ) {
+    return null;
+  }
+
+  let room: string;
+  let roomKey: string;
+
+  if (typeof b.room === "string" && b.room.length > 0 && !isRoomHash(b.room)) {
+    room = normalizeRoomString(b.room);
+    roomKey = await ensureRoomKey(room);
+  } else if (typeof b.roomKey === "string" && b.roomKey.length > 0) {
+    if (isRoomHash(b.roomKey)) {
+      roomKey = b.roomKey;
+      room = await resolveRoom(roomKey);
+    } else {
+      room = normalizeRoomString(b.roomKey);
+      roomKey = await ensureRoomKey(room);
+    }
+  } else if (typeof b.room === "string" && isRoomHash(b.room)) {
+    roomKey = b.room;
+    room = await resolveRoom(roomKey);
+  } else {
+    return null;
+  }
+
+  return {
+    room,
+    roomKey,
+    wall: b.wall,
+    shelf: b.shelf,
+    book: b.book,
+    page: b.page,
+  };
+}
+
+/** @deprecated Prefer importBookmarksJson().current — kept for simple coord peek. */
+export function parseCurrentFromImport(raw: string): {
+  roomKey: string;
+  wall: number;
+  shelf: number;
+  book: number;
+  page: number;
+  room?: string;
+} | null {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       return null;
     }
-    const obj = parsed as Partial<LibraryExport> & CoordinateExport & {
-      identifier?: string;
-      room?: string;
-    };
-    if (obj.current?.roomKey) return obj.current;
-    if (
-      typeof obj.roomKey === "string" &&
-      typeof obj.wall === "number" &&
-      typeof obj.shelf === "number" &&
-      typeof obj.book === "number" &&
-      typeof obj.page === "number"
-    ) {
+    const obj = parsed as Partial<LibraryExport> & LegacyBookmark;
+    const src = (obj.current ?? obj) as LegacyBookmark;
+    if (typeof src.wall !== "number") return null;
+    if (typeof src.room === "string" && !isRoomHash(src.room)) {
       return {
-        roomKey: obj.roomKey,
-        wall: obj.wall,
-        shelf: obj.shelf,
-        book: obj.book,
-        page: obj.page,
+        room: src.room,
+        roomKey: typeof src.roomKey === "string" ? src.roomKey : src.room.slice(0, 16),
+        wall: src.wall,
+        shelf: src.shelf!,
+        book: src.book!,
+        page: src.page!,
+      };
+    }
+    if (typeof src.roomKey === "string") {
+      return {
+        roomKey: src.roomKey,
+        wall: src.wall,
+        shelf: src.shelf!,
+        book: src.book!,
+        page: src.page!,
       };
     }
     return null;

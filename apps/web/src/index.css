@@ -107,6 +107,13 @@ a:hover {
   width: 100%;
 }
 
+.page-mark {
+  background: color-mix(in srgb, var(--mark) 45%, transparent);
+  color: inherit;
+  border-radius: 0;
+  padding: 0;
+}
+
 @keyframes hud-pulse {
   from {
     opacity: 0.35;
