@@ -30,6 +30,16 @@ export const AU_METERS = 149_597_870_700n;
 export const LIGHT_YEAR_METERS = 9_460_730_472_580_800n;
 
 /**
+ * IAU conventional parsec in meters (integer truncation of 3.0856775814913673×10¹⁶).
+ * Used only for display unit selection via log₁₀ — not for room indexing.
+ */
+export const PARSEC_METERS = 30_856_775_814_913_673n;
+
+export const KILOPARSEC_METERS = PARSEC_METERS * 1_000n;
+export const MEGAPARSEC_METERS = PARSEC_METERS * 1_000_000n;
+export const GIGAPARSEC_METERS = PARSEC_METERS * 1_000_000_000n;
+
+/**
  * Axial deltas for pointy-top hex, N = +r.
  * N/NE/SE/S/SW/NW must match ring walk and movement.
  */

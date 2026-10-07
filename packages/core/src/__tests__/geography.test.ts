@@ -4,7 +4,11 @@
 
 import {
   AU_METERS,
+  GIGAPARSEC_METERS,
+  KILOPARSEC_METERS,
   LIGHT_YEAR_METERS,
+  MEGAPARSEC_METERS,
+  PARSEC_METERS,
   ROOM_SPACING_METERS,
   babelRoomToPhysicalLocation,
   bearingDegrees,
@@ -277,27 +281,56 @@ describe("distance and formatting", () => {
     expect(east!).toBeLessThan(180);
   });
 
-  it("formats distances with unit escalation", () => {
+  it("formats distances with unit escalation through Gpc", () => {
     expect(formatLibraryDistance(12.5)).toMatch(/m$/);
     expect(formatLibraryDistance(4_672_800)).toMatch(/km/);
     expect(formatLibraryDistance(Number(AU_METERS) * 2)).toMatch(/AU/);
-    expect(formatLibraryDistance(Number(LIGHT_YEAR_METERS) * 1.01)).toMatch(
-      /LIGHT-YEARS/
-    );
+
+    // Prefer log₁₀ paths for unit constants that exceed float exactness.
+    // light-years band is ~0.1 ly … ~0.1 pc (≈ 0.33 ly); stay inside it.
+    const log10Ly = Math.log10(Number(LIGHT_YEAR_METERS));
+    expect(
+      formatLibraryDistanceFromLog10Meters(log10Ly + Math.log10(0.2))
+    ).toMatch(/light-years/);
+
+    const log10Pc = Math.log10(Number(PARSEC_METERS));
+    expect(
+      formatLibraryDistanceFromLog10Meters(log10Pc + Math.log10(2))
+    ).toMatch(/(?<![A-Za-z])pc(?![A-Za-z])/);
+
+    const log10Kpc = Math.log10(Number(KILOPARSEC_METERS));
+    expect(
+      formatLibraryDistanceFromLog10Meters(log10Kpc + Math.log10(2))
+    ).toMatch(/kpc/);
+
+    const log10Mpc = Math.log10(Number(MEGAPARSEC_METERS));
+    expect(
+      formatLibraryDistanceFromLog10Meters(log10Mpc + Math.log10(2))
+    ).toMatch(/Mpc/);
+
+    const log10Gpc = Math.log10(Number(GIGAPARSEC_METERS));
+    expect(
+      formatLibraryDistanceFromLog10Meters(log10Gpc + Math.log10(2))
+    ).toMatch(/Gpc/);
+    expect(
+      formatLibraryDistanceFromLog10Meters(log10Gpc + Math.log10(2))
+    ).not.toMatch(/BEYOND COSMOLOGICAL SCALE/);
   });
 
-  it("formats megadigit shell distances into AU / light-years via log₁₀", () => {
-    // 1.14 × 10^114820 rooms × 1.25 m → still light-years with a huge exponent
+  it("formats megadigit shell distances beyond cosmological scale via log₁₀", () => {
+    // 1.14 × 10^114820 rooms × 1.25 m → scientific light-years + marker
     const log10Shell = 114820 + Math.log10(1.14);
     const label = formatGridDistanceFromLog10Shell(log10Shell);
-    expect(label).toMatch(/LIGHT-YEARS/);
+    expect(label).toMatch(/light-years/);
+    expect(label).toMatch(/BEYOND COSMOLOGICAL SCALE/);
     expect(label).toMatch(/\(grid\)/);
     expect(label).toMatch(/× 10/);
     // Exponent should be ~114804 (shell log − log₁₀(ly) + log₁₀(1.25))
     expect(label).toMatch(/10¹¹⁴⁸⁰/);
 
     const fromBig = formatGridDistanceFromShell(10n ** 40n);
-    expect(fromBig).toMatch(/LIGHT-YEARS/);
+    expect(fromBig).toMatch(/light-years/);
+    expect(fromBig).toMatch(/BEYOND COSMOLOGICAL SCALE/);
     expect(fromBig).toMatch(/\(grid\)/);
 
     // Modest shell still escalates through AU
@@ -315,7 +348,8 @@ describe("distance and formatting", () => {
     };
     const block = formatPhysicalLocation(loc);
     expect(block).toContain("PHYSICAL DISTANCE");
-    expect(block).toMatch(/LIGHT-YEARS|AU/);
+    expect(block).toMatch(/light-years/);
+    expect(block).toMatch(/BEYOND COSMOLOGICAL SCALE/);
   });
 
   it("formats huge indices with scientific notation (no megabyte strings)", () => {
