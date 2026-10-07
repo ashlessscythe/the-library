@@ -1,4 +1,9 @@
-import { formatIdentifier, normalizeRoomString, parseIdentifier } from "@the-library/core";
+import {
+  formatIdentifier,
+  normalizeRoomString,
+  parseIdentifier,
+  splitIdentifier,
+} from "@the-library/core";
 import { ensureRoomKey, isRoomHash, resolveRoom } from "@/lib/rooms";
 
 const KEY = "the-library-bookmarks";
@@ -314,7 +319,8 @@ export async function migrateBookmarks(): Promise<Bookmark[]> {
 }
 
 export async function addBookmark(identifier: string): Promise<Bookmark[]> {
-  const parsed = parseIdentifier(identifier);
+  // Avoid BigInt-parsing megabyte rooms on Safari (JSC cap).
+  const parsed = splitIdentifier(identifier);
   const roomKey = await ensureRoomKey(parsed.roomString);
   const entry: Bookmark = {
     id: crypto.randomUUID(),

@@ -9,6 +9,7 @@ The Library maps each book coordinate to unique text using a modular bijection a
 - Book: 410 pages × 40 lines × 80 characters = 1,312,000 characters
 - Identifier: `ROOM.WALL.SHELF.BOOK.PAGE` (room in base-32 `[0-9a-v]`)
 - Random: uniform sequential book index in `[1, N]`, plus a random page (full library depth)
+- Browser engine: `gmp-wasm` in the web worker (JavaScriptCore / Safari caps native BigInt at ~1M bits; `N` is ~6.5M bits)
 
 ## Sequential index
 

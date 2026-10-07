@@ -16,6 +16,7 @@ import {
   formatIdentifier,
   parseIdentifier,
   sequentialFromCoordinate,
+  splitIdentifier,
 } from "../coordinates/identifier";
 import { parseBase32, toBase32Padded } from "../mathematics/base32";
 import { parseNumbersFile } from "../mathematics/numbers";
@@ -76,6 +77,16 @@ describe("coordinates", () => {
         parsed.page
       )
     ).toBe(id);
+  });
+
+  it("splitIdentifier avoids BigInt room parse", () => {
+    const longRoom = "v".repeat(64);
+    const parts = splitIdentifier(`${longRoom}.2.3.4.5`);
+    expect(parts.roomString).toBe(longRoom);
+    expect(parts.wall).toBe(2);
+    expect(parts.shelf).toBe(3);
+    expect(parts.book).toBe(4);
+    expect(parts.page).toBe(5);
   });
 
   it("rejects out-of-range wall/shelf/book/page", () => {
