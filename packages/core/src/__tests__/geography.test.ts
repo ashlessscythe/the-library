@@ -10,6 +10,8 @@ import {
   bearingDegrees,
   bitLength,
   findShell,
+  integerCbrt,
+  integerSqrt,
   formatCompactBigInt,
   formatLibraryDistance,
   formatPhysicalLocation,
@@ -107,6 +109,26 @@ describe("shell totals", () => {
       }
       // first index of next shell
       expect(findShell(t)).toBe(R + 1n);
+    }
+  });
+
+  it("integer roots match small values", () => {
+    expect(integerSqrt(0n)).toBe(0n);
+    expect(integerSqrt(1n)).toBe(1n);
+    expect(integerSqrt(15n)).toBe(3n);
+    expect(integerSqrt(16n)).toBe(4n);
+    expect(integerCbrt(0n)).toBe(0n);
+    expect(integerCbrt(8n)).toBe(2n);
+    expect(integerCbrt(27n)).toBe(3n);
+    expect(integerCbrt(26n)).toBe(2n);
+  });
+
+  it("findShell handles huge indices without hanging", () => {
+    const samples = [10n ** 40n, 10n ** 200n, 10n ** 500n];
+    for (const n of samples) {
+      const R = findShell(n);
+      expect(totalThroughShell(R) > n).toBe(true);
+      if (R > 0n) expect(totalThroughShell(R - 1n) <= n).toBe(true);
     }
   });
 });

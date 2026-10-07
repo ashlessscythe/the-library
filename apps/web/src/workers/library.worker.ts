@@ -7,6 +7,7 @@ import {
   buildSpacePaddedBook,
   type MoveDirection,
   type PageContent,
+  type PhysicalDirection,
 } from "@the-library/core";
 import {
   gmpGeneratePage,
@@ -15,6 +16,12 @@ import {
   gmpRandomIdentifier,
   initGmpEngine,
 } from "./gmpEngine";
+import {
+  gmpGeographyMove,
+  gmpGeographyResetEntrance,
+  gmpGeographySeedFromRoom,
+  type GeographySnapshot,
+} from "./gmpGeography";
 
 const SEARCH_ALLOWED = new Set(ALPHA);
 
@@ -37,11 +44,16 @@ export type WorkerRequest =
       mode: "empty" | "emptybook" | "chars" | "space";
     }
   | { id: number; type: "move"; identifier: string; direction: MoveDirection }
-  | { id: number; type: "random" };
+  | { id: number; type: "random" }
+  | { id: number; type: "geographySeed"; room: string }
+  | { id: number; type: "geographyMove"; direction: PhysicalDirection }
+  | { id: number; type: "geographyReset" };
 
 export type WorkerResponse =
   | { id: number; ok: true; result: unknown }
   | { id: number; ok: false; error: string };
+
+export type { GeographySnapshot };
 
 let ready = false;
 
@@ -106,6 +118,24 @@ async function handleMessage(msg: WorkerRequest): Promise<void> {
         ensureReady();
         const identifier = gmpRandomIdentifier();
         postMessage({ id: msg.id, ok: true, result: identifier } satisfies WorkerResponse);
+        break;
+      }
+      case "geographySeed": {
+        ensureReady();
+        const snap: GeographySnapshot = gmpGeographySeedFromRoom(msg.room);
+        postMessage({ id: msg.id, ok: true, result: snap } satisfies WorkerResponse);
+        break;
+      }
+      case "geographyMove": {
+        ensureReady();
+        const snap: GeographySnapshot = gmpGeographyMove(msg.direction);
+        postMessage({ id: msg.id, ok: true, result: snap } satisfies WorkerResponse);
+        break;
+      }
+      case "geographyReset": {
+        ensureReady();
+        const snap: GeographySnapshot = gmpGeographyResetEntrance();
+        postMessage({ id: msg.id, ok: true, result: snap } satisfies WorkerResponse);
         break;
       }
       default:

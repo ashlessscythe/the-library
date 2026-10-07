@@ -21,6 +21,7 @@ import {
   type MoveDirection,
   type PageContent,
 } from "@the-library/core";
+import { attachGmpGeography } from "./gmpGeography";
 
 const NUM_MAP: Record<string, string> = {};
 const CHAR_MAP: Record<string, string> = {};
@@ -128,6 +129,8 @@ export async function initGmpEngine(hexJson: string): Promise<void> {
   randState = 0;
   g.gmp_randinit_default(randState as never);
   g.gmp_randseed_ui(randState as never, (Date.now() >>> 0) || 1);
+
+  attachGmpGeography(g);
 }
 
 function seqFromIdentifier(identifier: string): {

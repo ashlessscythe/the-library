@@ -3,6 +3,7 @@
   All O(1) space — never materialize rings or disks.
 */
 
+import { integerSqrt } from "./roots";
 import {
   HEX_DIRECTIONS,
   RING_WALK_DIRS,
@@ -134,12 +135,29 @@ export function hexRingRank(R: bigint, q: bigint, r: bigint): bigint {
 export function findDiskRing(offset: bigint): bigint {
   if (offset < 0n) throw new Error("findDiskRing: offset must be >= 0");
   if (offset === 0n) return 0n;
-  // Solve 1 + 3k(k+1) > offset ⇒ 3k² + 3k + 1 > offset
-  // Binary search k in [1, ...]. High: k such that 3k² >= offset ⇒ k >= cbrt-ish
-  let lo = 1n;
-  let hi = 1n;
+  // Solve 1 + 3k(k+1) > offset ⇒ 3k² + 3k + 1 > offset ≈ 3k².
+  // Seed with isqrt — do not double from 1 (O(bits) for huge offsets).
+  let guess = integerSqrt(offset / 3n);
+  if (guess < 1n) guess = 1n;
+
+  let lo: bigint;
+  let hi: bigint;
+  if (hexDiskSize(guess) > offset) {
+    hi = guess;
+    lo = 1n;
+    while (lo < hi) {
+      const mid = (lo + hi) / 2n;
+      if (hexDiskSize(mid) > offset) hi = mid;
+      else lo = mid + 1n;
+    }
+    return lo;
+  }
+
+  lo = guess;
+  hi = guess + 1n;
   while (hexDiskSize(hi) <= offset) {
-    hi *= 2n;
+    lo = hi;
+    hi = hi * 2n + 1n;
   }
   while (lo < hi) {
     const mid = (lo + hi) / 2n;

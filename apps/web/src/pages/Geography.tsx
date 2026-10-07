@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -32,10 +33,13 @@ import {
 } from "@the-library/core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useLibraryEngine } from "@/hooks/useLibraryEngine";
 import type { GeographyLocationState } from "@/lib/geographyNav";
 import { bookPath } from "@/lib/routes";
 import { ensureRoomKey, resolveRoom } from "@/lib/rooms";
+import type { GeographySnapshot } from "@/workers/library.worker";
 
+/** Manual Jump fields / sync BigInt path. Larger rooms use the GMP worker. */
 const INPUT_DIGIT_CAP = 256;
 /** Uniform random geo index bound — vast, but short enough for UI fields. */
 const RANDOM_GEO_MAX = 10n ** 36n;
@@ -84,31 +88,65 @@ export function Geography() {
   const navigate = useNavigate();
   const route = useLocation();
   const seed = (route.state as GeographyLocationState | null) ?? null;
+  const {
+    ready: engineReady,
+    error: engineError,
+    geographySeed,
+    geographyMove,
+    geographyReset,
+  } = useLibraryEngine();
 
   const [location, setLocation] = useState<PhysicalLocation>(() =>
     roomIndexToPhysicalLocation(0n)
   );
+  /** GMP session snapshot for book-scale rooms (never put full ids in inputs). */
+  const [largeSnap, setLargeSnap] = useState<GeographySnapshot | null>(null);
+  const largeRoomRef = useRef<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(Boolean(seed?.roomKey));
+  const [busy, setBusy] = useState(false);
   const [opening, setOpening] = useState(false);
   const [jumpMode, setJumpMode] = useState<"babel" | "geo">("babel");
   const [babelRoom, setBabelRoom] = useState("1");
   const [geoIndex, setGeoIndex] = useState("0");
 
-  const shell = roomDistanceFromOrigin(location);
-  const babel = physicalLocationToBabelRoom(location);
-  const babelStr = roomToBase32(babel);
-  const geo = physicalLocationToRoomIndex(location);
-  const bearing = formatBearing(location);
-  const euc = euclideanMeters(location);
-  const neighbors = useMemo(() => nearbyMap(location), [location]);
+  const largeMode = largeSnap != null;
 
-  function applyLocation(next: PhysicalLocation) {
+  const shell = largeMode
+    ? null
+    : roomDistanceFromOrigin(location);
+  const babel = largeMode ? null : physicalLocationToBabelRoom(location);
+  const babelStr = largeMode
+    ? largeSnap.babelRoomShort
+    : roomToBase32(babel!);
+  const geo = largeMode ? null : physicalLocationToRoomIndex(location);
+  const bearing = largeMode
+    ? largeSnap.bearing
+    : formatBearing(location);
+  const euc = largeMode ? null : euclideanMeters(location);
+  const neighbors = useMemo(
+    () => (largeMode ? null : nearbyMap(location)),
+    [location, largeMode]
+  );
+
+  function applySyncLocation(next: PhysicalLocation) {
+    setLargeSnap(null);
+    largeRoomRef.current = null;
     setLocation(next);
     const nextGeo = physicalLocationToRoomIndex(next);
     const nextBabel = physicalLocationToBabelRoom(next);
     setGeoIndex(nextGeo.toString());
     setBabelRoom(roomToBase32(nextBabel));
+    setError(null);
+  }
+
+  function applyLargeSnap(snap: GeographySnapshot) {
+    setLargeSnap(snap);
+    largeRoomRef.current = snap.babelRoom;
+    // Keep jump fields empty-ish so we never paste megabyte strings into inputs.
+    setBabelRoom("");
+    setGeoIndex("");
     setError(null);
   }
 
@@ -122,50 +160,80 @@ export function Geography() {
     let cancelled = false;
     setSeeding(true);
     setError(null);
-    resolveRoom(key)
-      .then((full) => {
+
+    (async () => {
+      try {
+        const full = await resolveRoom(key);
         if (cancelled) return;
         const norm = normalizeRoomString(full);
-        if (norm.length > INPUT_DIGIT_CAP) {
-          setError(
-            `This room’s id is too large to locate in geography (${norm.length} digits; max ${INPUT_DIGIT_CAP}).`
-          );
+        if (norm.length <= INPUT_DIGIT_CAP) {
+          const room = parseBase32(norm);
+          if (room < 1n) throw new Error("Babel room must be ≥ 1");
+          applySyncLocation(babelRoomToPhysicalLocation(room));
           setSeeding(false);
           return;
         }
-        const room = parseBase32(norm);
-        if (room < 1n) {
-          throw new Error("Babel room must be ≥ 1");
+        // Book-scale room: GMP worker (Safari-safe, no megabyte React state).
+        if (!engineReady) {
+          // Wait for engine — effect re-runs when ready flips.
+          return;
         }
-        applyLocation(babelRoomToPhysicalLocation(room));
+        const snap = await geographySeed(norm);
+        if (cancelled) return;
+        applyLargeSnap(snap);
         setSeeding(false);
-      })
-      .catch((e: Error) => {
+      } catch (e) {
         if (!cancelled) {
-          setError(e.message || "Could not load room for geography");
+          setError(e instanceof Error ? e.message : "Could not load room");
           setSeeding(false);
         }
-      });
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
-    // Only re-seed when the incoming roomKey changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyLocation is stable enough via setState
-  }, [seed?.roomKey]);
+  }, [seed?.roomKey, engineReady, geographySeed]);
 
-  function step(dir: PhysicalDirection) {
-    applyLocation(move(location, dir));
+  async function step(dir: PhysicalDirection) {
+    if (busy) return;
+    if (largeMode) {
+      setBusy(true);
+      setError(null);
+      try {
+        const snap = await geographyMove(dir);
+        applyLargeSnap(snap);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Move failed");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    applySyncLocation(move(location, dir));
   }
 
-  function resetToEntrance() {
-    applyLocation(roomIndexToPhysicalLocation(0n));
+  async function resetToEntrance() {
+    if (largeMode && engineReady) {
+      setBusy(true);
+      try {
+        await geographyReset();
+      } catch {
+        /* session reset best-effort; UI returns to Entrance either way */
+      } finally {
+        setBusy(false);
+      }
+    }
+    applySyncLocation(roomIndexToPhysicalLocation(0n));
   }
 
   async function openVolume() {
     setOpening(true);
     setError(null);
     try {
-      const roomString = roomToBase32(physicalLocationToBabelRoom(location));
+      const roomString = largeMode
+        ? largeRoomRef.current ?? largeSnap!.babelRoom
+        : roomToBase32(physicalLocationToBabelRoom(location));
       const roomKey = await ensureRoomKey(roomString);
       navigate(
         bookPath({
@@ -189,17 +257,19 @@ export function Geography() {
         const roomStr = normalizeRoomString(babelRoom);
         if (!roomStr) throw new Error("Enter a Babel room (base-32)");
         if (roomStr.length > INPUT_DIGIT_CAP) {
-          throw new Error(`Room limited to ${INPUT_DIGIT_CAP} digits`);
+          throw new Error(
+            `Paste rooms up to ${INPUT_DIGIT_CAP} digits here. Open a large room from Explore or the Reader — Geography will locate it via the engine.`
+          );
         }
         const room = parseBase32(roomStr);
         if (room < 1n) throw new Error("Babel room must be ≥ 1");
-        applyLocation(babelRoomToPhysicalLocation(room));
+        applySyncLocation(babelRoomToPhysicalLocation(room));
       } else {
         const digits = geoIndex.replace(/^0+(?=\d)/, "") || "0";
         if (digits.length > INPUT_DIGIT_CAP) {
           throw new Error(`Index limited to ${INPUT_DIGIT_CAP} digits`);
         }
-        applyLocation(roomIndexToPhysicalLocation(BigInt(digits)));
+        applySyncLocation(roomIndexToPhysicalLocation(BigInt(digits)));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -208,12 +278,28 @@ export function Geography() {
 
   function jumpToRandom() {
     try {
-      const geo = randomBigIntBelow(RANDOM_GEO_MAX);
-      applyLocation(roomIndexToPhysicalLocation(geo));
+      const geoN = randomBigIntBelow(RANDOM_GEO_MAX);
+      applySyncLocation(roomIndexToPhysicalLocation(geoN));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Random jump failed");
     }
   }
+
+  const levelDisplay = largeMode
+    ? largeSnap.levelCompact
+    : formatSignedLevel(location.level);
+  const shellDisplay = largeMode
+    ? largeSnap.shellCompact
+    : formatCompactBigInt(shell!);
+  const shellIsOne = !largeMode && shell === 1n;
+  const geoDisplay = largeMode
+    ? largeSnap.geoCompact
+    : formatCompactBigInt(geo!);
+  const distLabel = largeMode
+    ? largeSnap.physicalDistanceLabel
+    : euc != null
+      ? formatLibraryDistance(euc)
+      : null;
 
   return (
     <article className="mx-auto max-w-3xl space-y-10">
@@ -230,36 +316,40 @@ export function Geography() {
         </p>
       </header>
 
-      {/* Always-visible: you are here */}
       <section className="space-y-6 border border-[var(--line)] bg-[var(--paper)] p-6 sm:p-8">
         <div className="space-y-2">
           <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-[var(--mark)]">
             You are here
           </p>
           <p className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl">
-            Level {formatSignedLevel(location.level)}
+            Level {levelDisplay}
           </p>
           <p className="font-serif text-lg text-[var(--muted)]">
-            {formatCompactBigInt(shell)}{" "}
-            {shell === 1n ? "room" : "rooms"} from the Entrance
+            {shellDisplay} {shellIsOne ? "room" : "rooms"} from the Entrance
             {bearing ? (
               <span className="text-[var(--dim)]"> · bearing {bearing}</span>
             ) : null}
           </p>
-          {euc != null ? (
+          {distLabel ? (
             <p className="font-mono text-xs uppercase tracking-wider text-[var(--dim)]">
-              ≈ {formatLibraryDistance(euc)}
+              ≈ {distLabel}
             </p>
           ) : null}
           <p className="font-mono text-xs text-[var(--dim)]">
             Babel room{" "}
-            <span className="text-[var(--muted)]">{shortenRoom(babelStr)}</span>
+            <span className="text-[var(--muted)]">
+              {largeMode ? largeSnap.babelRoomShort : shortenRoom(babelStr)}
+            </span>
             <span className="mx-2 text-[var(--line)]">·</span>
-            Geo {formatCompactBigInt(geo)}
+            Geo {geoDisplay}
           </p>
+          {largeMode ? (
+            <p className="font-mono text-[10px] text-[var(--dim)]">
+              Large room — place computed by the library engine (compact display).
+            </p>
+          ) : null}
         </div>
 
-        {/* Hex move rose */}
         <div className="space-y-3">
           <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-[var(--dim)]">
             Move
@@ -272,7 +362,8 @@ export function Geography() {
                 variant="outline"
                 size="sm"
                 className="font-mono"
-                onClick={() => step(d)}
+                disabled={busy || seeding}
+                onClick={() => void step(d)}
               >
                 {d}
               </Button>
@@ -284,7 +375,8 @@ export function Geography() {
               variant="outline"
               size="sm"
               className="min-w-[5rem] font-mono"
-              onClick={() => step("UP")}
+              disabled={busy || seeding}
+              onClick={() => void step("UP")}
             >
               UP
             </Button>
@@ -293,7 +385,8 @@ export function Geography() {
               variant="outline"
               size="sm"
               className="min-w-[5rem] font-mono"
-              onClick={() => step("DOWN")}
+              disabled={busy || seeding}
+              onClick={() => void step("DOWN")}
             >
               DOWN
             </Button>
@@ -301,13 +394,18 @@ export function Geography() {
         </div>
 
         <div className="flex flex-wrap gap-3 border-t border-[var(--line)] pt-6">
-          <Button type="button" variant="outline" onClick={resetToEntrance}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy || seeding}
+            onClick={() => void resetToEntrance()}
+          >
             Reset to Entrance
           </Button>
           <Button
             type="button"
             variant="mark"
-            disabled={opening}
+            disabled={opening || seeding}
             onClick={() => void openVolume()}
           >
             {opening ? "Opening…" : "Open volume in this room"}
@@ -316,48 +414,95 @@ export function Geography() {
         {seeding ? (
           <p className="font-mono text-xs text-[var(--dim)]">
             Locating this room…
+            {!engineReady ? " (starting engine)" : ""}
           </p>
+        ) : null}
+        {engineError ? (
+          <p className="font-mono text-xs text-red-500">{engineError}</p>
         ) : null}
         {error ? (
           <p className="font-mono text-xs text-red-500">{error}</p>
         ) : null}
       </section>
 
-      {/* Progressive disclosure */}
       <div className="space-y-2">
         <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-[var(--dim)]">
           Details
         </p>
 
         <Disclosure title="Neighbors">
-          <pre className="overflow-x-auto whitespace-pre font-mono text-[11px] leading-relaxed text-[var(--fg)]">
-            {formatNearbyAscii(location)}
-          </pre>
-          <ul className="grid gap-1 font-mono text-[11px] text-[var(--muted)] sm:grid-cols-2">
-            {neighbors.neighbors.map((n) => (
-              <li key={n.direction}>
-                <button
-                  type="button"
-                  className="hover:text-[var(--mark)]"
-                  onClick={() => applyLocation(n.location)}
-                >
-                  {n.direction} → geo {formatCompactBigInt(n.geoIndex)}
-                </button>
-              </li>
-            ))}
-          </ul>
+          {largeMode ? (
+            <p className="font-mono text-[11px] text-[var(--muted)]">
+              Neighbor index list is omitted for book-scale rooms (use the move
+              buttons above). Technical Q/R stay available below.
+            </p>
+          ) : (
+            <>
+              <pre className="overflow-x-auto whitespace-pre font-mono text-[11px] leading-relaxed text-[var(--fg)]">
+                {formatNearbyAscii(location)}
+              </pre>
+              <ul className="grid gap-1 font-mono text-[11px] text-[var(--muted)] sm:grid-cols-2">
+                {neighbors!.neighbors.map((n) => (
+                  <li key={n.direction}>
+                    <button
+                      type="button"
+                      className="hover:text-[var(--mark)]"
+                      onClick={() => applySyncLocation(n.location)}
+                    >
+                      {n.direction} → geo {formatCompactBigInt(n.geoIndex)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </Disclosure>
 
         <Disclosure title="From the Entrance">
-          <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-[var(--fg)]">
-            {formatPhysicalLocation(location)}
-          </pre>
+          {largeMode ? (
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-[var(--fg)]">
+              {[
+                "FROM THE ENTRANCE",
+                "",
+                "DISTANCE",
+                `${largeSnap.shellCompact} ROOMS`,
+                "",
+                "LEVEL",
+                largeSnap.levelCompact,
+                ...(largeSnap.bearing
+                  ? ["", "BEARING", largeSnap.bearing]
+                  : []),
+                ...(largeSnap.physicalDistanceLabel
+                  ? ["", "PHYSICAL DISTANCE", largeSnap.physicalDistanceLabel]
+                  : []),
+              ].join("\n")}
+            </pre>
+          ) : (
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-[var(--fg)]">
+              {formatPhysicalLocation(location)}
+            </pre>
+          )}
         </Disclosure>
 
         <Disclosure title="Technical coordinates">
-          <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-[var(--fg)]">
-            {formatTechnicalCoordinates(location)}
-          </pre>
+          {largeMode ? (
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-[var(--fg)]">
+              {[
+                "Q",
+                largeSnap.qCompact,
+                "",
+                "R",
+                largeSnap.rCompact,
+                "",
+                "LEVEL",
+                largeSnap.levelCompact,
+              ].join("\n")}
+            </pre>
+          ) : (
+            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-[var(--fg)]">
+              {formatTechnicalCoordinates(location)}
+            </pre>
+          )}
           <p className="font-mono text-[10px] text-[var(--dim)]">
             Exact axial hex (q, r) and level. Huge values are compacted.
           </p>
@@ -386,7 +531,7 @@ export function Geography() {
             {jumpMode === "babel" ? (
               <label className="block space-y-1">
                 <span className="font-mono text-[10px] uppercase tracking-wider text-[var(--dim)]">
-                  Room (base-32)
+                  Room (base-32, ≤{INPUT_DIGIT_CAP} digits)
                 </span>
                 <Input
                   value={babelRoom}
@@ -425,8 +570,9 @@ export function Geography() {
               </Button>
             </div>
             <p className="font-mono text-[10px] text-[var(--dim)]">
-              Random picks a crypto-uniform geography index out to 10³⁶ — far
-              from the Entrance, still openable as a volume.
+              Random picks a crypto-uniform geography index out to 10³⁶. Search
+              rooms with million-digit ids locate automatically when opened from
+              Explore or the Reader.
             </p>
           </form>
         </Disclosure>

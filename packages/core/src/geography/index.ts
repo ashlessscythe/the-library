@@ -1,4 +1,6 @@
 export * from "./types";
+export * from "./bitLength";
+export * from "./roots";
 export * from "./hex";
 export * from "./shells";
 export * from "./mapping";

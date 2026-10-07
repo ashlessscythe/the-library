@@ -3,6 +3,10 @@
 */
 
 import { hexDiskSize, hexRingSize } from "./hex";
+import { integerCbrt } from "./roots";
+
+export { bitLength } from "./bitLength";
+export { integerCbrt, integerSqrt } from "./roots";
 
 /**
  * Cumulative count of physical locations with
@@ -48,17 +52,37 @@ export function shellBandSize(R: bigint, level: bigint): bigint {
 
 /**
  * Smallest R such that total(R) > N.
- * O(log R) BigInt arithmetic; no linear R++ scan.
+ *
+ * Uses Newton integer cube-root to seed a tight window, then a short
+ * binary search. Must NOT binary-search a 2^(bits/3) range (that is
+ * O(bits) iterations and hangs on book-scale indices).
  */
 export function findShell(N: bigint): bigint {
   if (N < 0n) throw new Error("findShell: N must be >= 0");
   if (N === 0n) return 0n;
 
-  let hi = estimateShellUpperBound(N);
-  while (totalThroughShell(hi) <= N) {
-    hi *= 2n;
+  // total(R) = 6R³ + 9R² + 5R + 1 ≈ 6R³  ⇒  R ≈ cbrt(N/6)
+  let guess = integerCbrt(N / 6n);
+  if (guess < 1n) guess = 1n;
+
+  let lo: bigint;
+  let hi: bigint;
+  if (totalThroughShell(guess) > N) {
+    hi = guess;
+    lo = guess > 2n ? guess / 2n : 0n;
+    while (lo > 0n && totalThroughShell(lo) > N) {
+      hi = lo;
+      lo = lo / 2n;
+    }
+  } else {
+    lo = guess;
+    hi = guess + 1n;
+    while (totalThroughShell(hi) <= N) {
+      lo = hi;
+      hi = hi * 2n + 1n;
+    }
   }
-  let lo = 0n;
+
   while (lo < hi) {
     const mid = (lo + hi) / 2n;
     if (totalThroughShell(mid) > N) hi = mid;
@@ -68,31 +92,10 @@ export function findShell(N: bigint): bigint {
 }
 
 /**
- * Upper bound for shell radius of index N.
- * Uses bit length so we never walk R from 0.
+ * Upper bound for shell radius of index N (testing / diagnostics).
+ * Prefer findShell — do not binary-search this alone for huge N.
  */
 export function estimateShellUpperBound(N: bigint): bigint {
   if (N <= 1n) return 1n;
-  const bits = bitLength(N);
-  // 2^ceil(bits/3)+margin is a generous bound for cbrt(N)
-  const exp = BigInt(Math.floor((bits + 2) / 3) + 2);
-  const hi = 1n << exp;
-  return hi < 2n ? 2n : hi;
-}
-
-/** Bit length of |n| without decimal toString. */
-export function bitLength(n: bigint): number {
-  let x = n < 0n ? -n : n;
-  if (x === 0n) return 0;
-  let bits = 0;
-  while (x > 0xffffffffffffffffn) {
-    x >>= 64n;
-    bits += 64;
-  }
-  // Residual fits in 64 bits; split to 32-bit halves (Number safe).
-  const hi = Number(x >> 32n);
-  const lo = Number(x & 0xffffffffn);
-  if (hi > 0) return bits + 32 + (32 - Math.clz32(hi));
-  if (lo > 0) return bits + (32 - Math.clz32(lo));
-  return bits;
+  return integerCbrt(N / 6n) + 4n;
 }

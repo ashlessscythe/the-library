@@ -3,8 +3,8 @@
   Float only for final display; coordinates stay bigint.
 */
 
+import { bitLength } from "./bitLength";
 import { absBig, hexDistance, maxBig } from "./hex";
-import { bitLength } from "./shells";
 import {
   AU_METERS,
   COMPACT_DIGIT_BUDGET,
