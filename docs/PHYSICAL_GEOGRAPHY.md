@@ -152,9 +152,8 @@ roomIndexToPhysicalLocation(physicalLocationToRoomIndex(loc)) === loc
 Bearing from the Entrance uses `atan2(x, y)` with **0° = North**, **90° = East**. Bearing is display-only; canonical place remains `(q, r, level)`.
 
 Unit ladder for `formatLibraryDistance`: meters → kilometers → AU → light-years →
-parsecs → kpc → Mpc → Gpc. Beyond a readable Gpc coefficient, distances fall back
-to scientific light-years and append `BEYOND COSMOLOGICAL SCALE` (no further
-obscure units).
+parsecs → kpc → Mpc → Gpc. Past cosmological scale the display stays on **Gpc**
+(scientific exponents allowed) — never light-years with absurd exponents.
 
 Constants (bigint meters, display-only): `AU_METERS`, `LIGHT_YEAR_METERS`,
 `PARSEC_METERS`, and derived `KILOPARSEC_METERS` / `MEGAPARSEC_METERS` /

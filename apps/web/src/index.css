@@ -114,6 +114,18 @@ a:hover {
   padding: 0;
 }
 
+/* Active unit in the Geography scales legend (theme-tuned chip). */
+.scale-active-row {
+  border-left: 2px solid var(--mark);
+  color: var(--fg);
+  background-color: #5a4a18;
+}
+
+[data-theme="light"] .scale-active-row {
+  /* Saturated gold chip — must read clearly on cream --paper */
+  background-color: #f0d45c;
+}
+
 @keyframes hud-pulse {
   from {
     opacity: 0.35;

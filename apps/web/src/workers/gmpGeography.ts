@@ -572,7 +572,7 @@ function snapshotFromSession(g: Gmp): GeographySnapshot {
       const euc = Math.hypot(x, y, z);
       physicalDistanceLabel = formatLibraryDistance(euc);
     } else {
-      // Shell × 1.25 m → AU / ly via log₁₀ (coords too large for float Euclidean).
+      // Shell × 1.25 m → AU / ly / Gpc via log₁₀ (coords too large for float Euclidean).
       physicalDistanceLabel = formatGridDistanceFromLog10Shell(
         mpzApproxLog10(g, shell)
       );
@@ -619,7 +619,7 @@ function approximateSnapshotFromRoom(room: string): GeographySnapshot {
     babelRoomShort: shortenRoom(room),
     babelRoomLength: room.length,
     bearing: null,
-    // Shell rooms × 1.25 m — works for megadigit exponents (AU / ly).
+    // Shell rooms × 1.25 m — works for megadigit exponents (AU / ly / Gpc).
     physicalDistanceLabel: formatGridDistanceFromLog10Shell(log10Shell),
     exact: false,
   };
