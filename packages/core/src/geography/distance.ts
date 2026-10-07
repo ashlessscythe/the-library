@@ -144,16 +144,32 @@ function withCommas(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
 
-function scientificFromBigInt(a: bigint): string {
+/** log₁₀(|n|) without materializing a full decimal string. */
+export function log10AbsBigInt(n: bigint): number {
+  const a = absBig(n);
+  if (a === 0n) return -Infinity;
   const bits = bitLength(a);
-  if (bits === 0) return "0";
   const shift = Math.max(0, bits - 53);
   const top = shift > 0 ? a >> BigInt(shift) : a;
-  const topNum = Number(top);
-  const log10 = Math.log10(topNum) + shift * Math.log10(2);
+  return Math.log10(Number(top)) + shift * Math.log10(2);
+}
+
+function scientificFromBigInt(a: bigint): string {
+  if (a === 0n) return "0";
+  return formatScientificMantissa(log10AbsBigInt(a));
+}
+
+/** `m.mm × 10ᵉ` from a log₁₀ value (e may be any finite integer). */
+export function formatScientificMantissa(log10: number): string {
+  if (!Number.isFinite(log10)) return "∞";
+  if (log10 < 0) {
+    // Sub-unit values: still show scientific when useful
+    const e = Math.floor(log10);
+    const mant = 10 ** (log10 - e);
+    return `${mant.toFixed(2)} × 10${toSuperscript(e)}`;
+  }
   const e = Math.floor(log10);
   let mant = 10 ** (log10 - e);
-  // Normalize floating error
   if (mant >= 10) {
     return `${(mant / 10).toFixed(2)} × 10${toSuperscript(e + 1)}`;
   }
@@ -184,29 +200,82 @@ function toSuperscript(n: number): string {
 
 /**
  * Format a meter distance with automatic unit selection.
- * meters → km → AU → light-years.
+ * meters → km → AU → light-years (scientific when the value overflows floats).
  */
 export function formatLibraryDistance(meters: number): string {
   if (!Number.isFinite(meters)) {
     return "beyond float range";
   }
-  const abs = Math.abs(meters);
-  const au = Number(AU_METERS);
-  const ly = Number(LIGHT_YEAR_METERS);
+  if (meters === 0) return "0 m";
+  return formatLibraryDistanceFromLog10Meters(Math.log10(Math.abs(meters)));
+}
 
-  if (abs < 1000) {
+/**
+ * Same unit ladder as {@link formatLibraryDistance}, from log₁₀(meters).
+ * Safe for shell radii whose meter length exceeds `Number.MAX_VALUE`.
+ */
+export function formatLibraryDistanceFromLog10Meters(log10Meters: number): string {
+  if (!Number.isFinite(log10Meters)) {
+    return "beyond float range";
+  }
+  const log10Au = Math.log10(Number(AU_METERS));
+  const log10Ly = Math.log10(Number(LIGHT_YEAR_METERS));
+
+  // meters
+  if (log10Meters < 3) {
+    const meters = 10 ** log10Meters;
     return formatFixed(meters, meters < 10 ? 2 : 1) + " m";
   }
-  const km = meters / 1000;
-  if (abs < au / 10) {
-    return formatFixed(km, km < 100 ? 1 : 0) + " km";
+  // kilometers
+  if (log10Meters < log10Au - 1) {
+    return formatUnitFromLog10(log10Meters - 3, "km", 6);
   }
-  if (abs < ly / 10) {
-    const auVal = meters / au;
-    return formatFixed(auVal, auVal < 10 ? 2 : 2) + " AU";
+  // AU
+  if (log10Meters < log10Ly - 1) {
+    return formatUnitFromLog10(log10Meters - log10Au, "AU", 6);
   }
-  const lyVal = meters / ly;
-  return formatFixed(lyVal, lyVal < 10 ? 2 : 2) + " LIGHT-YEARS";
+  // light-years (including megadigit exponents)
+  return formatUnitFromLog10(log10Meters - log10Ly, "LIGHT-YEARS", 6);
+}
+
+/**
+ * Grid walk estimate: `shell` rooms × {@link ROOM_SPACING_METERS}.
+ * Appends `(grid)` so Euclidean vs shell-radius estimates stay distinct.
+ */
+export function formatGridDistanceFromShell(shell: bigint): string {
+  if (shell === 0n) return "0 m (grid)";
+  const log10Meters =
+    log10AbsBigInt(shell) + Math.log10(ROOM_SPACING_METERS);
+  return `${formatLibraryDistanceFromLog10Meters(log10Meters)} (grid)`;
+}
+
+/**
+ * Grid walk estimate from log₁₀(shell rooms). Used when only a log shell
+ * estimate is available (book-scale Babel rooms).
+ */
+export function formatGridDistanceFromLog10Shell(log10Shell: number): string {
+  if (!Number.isFinite(log10Shell) || log10Shell < 0) {
+    return formatGridDistanceFromShell(0n);
+  }
+  if (log10Shell === 0) return "1.25 m (grid)";
+  const log10Meters = log10Shell + Math.log10(ROOM_SPACING_METERS);
+  return `${formatLibraryDistanceFromLog10Meters(log10Meters)} (grid)`;
+}
+
+/** Plain or scientific quantity + unit from log₁₀(|value|). */
+function formatUnitFromLog10(
+  log10Value: number,
+  unit: string,
+  scientificFromDigits: number
+): string {
+  if (log10Value < scientificFromDigits && log10Value > -3) {
+    const v = 10 ** log10Value;
+    if (Number.isFinite(v)) {
+      const digits = v < 10 ? 2 : v < 100 ? 2 : 2;
+      return `${formatFixed(v, digits)} ${unit}`;
+    }
+  }
+  return `${formatScientificMantissa(log10Value)} ${unit}`;
 }
 
 function formatFixed(n: number, digits: number): string {
@@ -253,14 +322,9 @@ export function formatPhysicalLocation(location: PhysicalLocation): string {
   if (euc != null) {
     lines.push("", "PHYSICAL DISTANCE", formatLibraryDistance(euc));
   } else {
-    // Fall back to max of axis-aligned spacing distances when float-unsafe
+    // Float-unsafe coords: shell × spacing still yields AU / ly via log₁₀.
     const shell = roomDistanceFromOrigin(location);
-    if (approxDecimalDigits(shell) <= COMPACT_DIGIT_BUDGET) {
-      const meters = Number(shell) * ROOM_SPACING_METERS;
-      if (Number.isFinite(meters)) {
-        lines.push("", "PHYSICAL DISTANCE", formatLibraryDistance(meters) + " (grid)");
-      }
-    }
+    lines.push("", "PHYSICAL DISTANCE", formatGridDistanceFromShell(shell));
   }
 
   return lines.join("\n");

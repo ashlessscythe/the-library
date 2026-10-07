@@ -13,7 +13,10 @@ import {
   integerCbrt,
   integerSqrt,
   formatCompactBigInt,
+  formatGridDistanceFromLog10Shell,
+  formatGridDistanceFromShell,
   formatLibraryDistance,
+  formatLibraryDistanceFromLog10Meters,
   formatPhysicalLocation,
   formatTechnicalBigInt,
   hexDiskRank,
@@ -281,6 +284,38 @@ describe("distance and formatting", () => {
     expect(formatLibraryDistance(Number(LIGHT_YEAR_METERS) * 1.01)).toMatch(
       /LIGHT-YEARS/
     );
+  });
+
+  it("formats megadigit shell distances into AU / light-years via log₁₀", () => {
+    // 1.14 × 10^114820 rooms × 1.25 m → still light-years with a huge exponent
+    const log10Shell = 114820 + Math.log10(1.14);
+    const label = formatGridDistanceFromLog10Shell(log10Shell);
+    expect(label).toMatch(/LIGHT-YEARS/);
+    expect(label).toMatch(/\(grid\)/);
+    expect(label).toMatch(/× 10/);
+    // Exponent should be ~114804 (shell log − log₁₀(ly) + log₁₀(1.25))
+    expect(label).toMatch(/10¹¹⁴⁸⁰/);
+
+    const fromBig = formatGridDistanceFromShell(10n ** 40n);
+    expect(fromBig).toMatch(/LIGHT-YEARS/);
+    expect(fromBig).toMatch(/\(grid\)/);
+
+    // Modest shell still escalates through AU
+    const auish = formatLibraryDistanceFromLog10Meters(
+      Math.log10(Number(AU_METERS)) + Math.log10(3)
+    );
+    expect(auish).toMatch(/AU/);
+  });
+
+  it("includes PHYSICAL DISTANCE for float-unsafe coordinates", () => {
+    const loc = {
+      q: 10n ** 80n,
+      r: 0n,
+      level: 0n,
+    };
+    const block = formatPhysicalLocation(loc);
+    expect(block).toContain("PHYSICAL DISTANCE");
+    expect(block).toMatch(/LIGHT-YEARS|AU/);
   });
 
   it("formats huge indices with scientific notation (no megabyte strings)", () => {

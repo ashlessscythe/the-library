@@ -4,7 +4,11 @@
 */
 
 import { type GMPFunctions, type mpz_ptr } from "gmp-wasm";
-import type { PhysicalDirection } from "@the-library/core";
+import {
+  formatGridDistanceFromLog10Shell,
+  formatLibraryDistance,
+  type PhysicalDirection,
+} from "@the-library/core";
 
 export type GeographySnapshot = {
   shellCompact: string;
@@ -566,7 +570,12 @@ function snapshotFromSession(g: Gmp): GeographySnapshot {
         bearing = `${d}° ${String(minutes).padStart(2, "0")}′`;
       }
       const euc = Math.hypot(x, y, z);
-      physicalDistanceLabel = formatMeters(euc);
+      physicalDistanceLabel = formatLibraryDistance(euc);
+    } else {
+      // Shell × 1.25 m → AU / ly via log₁₀ (coords too large for float Euclidean).
+      physicalDistanceLabel = formatGridDistanceFromLog10Shell(
+        mpzApproxLog10(g, shell)
+      );
     }
 
     g.mpz_clear(roomMpz);
@@ -597,7 +606,8 @@ function approximateSnapshotFromRoom(room: string): GeographySnapshot {
     (room.length - head.length) * Math.log10(32) + Math.log10(headVal);
   // geo ≈ room − 1 ≈ room for huge values; R ≈ cbrt(geo/6)
   const log10R = (log10Room - Math.log10(6)) / 3;
-  const shellCompact = scientificFromLog10(Math.max(0, log10R));
+  const log10Shell = Math.max(0, log10R);
+  const shellCompact = scientificFromLog10(log10Shell);
   const geoCompact = scientificFromLog10(log10Room);
   return {
     shellCompact,
@@ -609,7 +619,8 @@ function approximateSnapshotFromRoom(room: string): GeographySnapshot {
     babelRoomShort: shortenRoom(room),
     babelRoomLength: room.length,
     bearing: null,
-    physicalDistanceLabel: null,
+    // Shell rooms × 1.25 m — works for megadigit exponents (AU / ly).
+    physicalDistanceLabel: formatGridDistanceFromLog10Shell(log10Shell),
     exact: false,
   };
 }
@@ -625,13 +636,20 @@ function scientificFromLog10(log10: number): string {
   return `${mant.toFixed(2)} × 10${toSuperscript(e)}`;
 }
 
-function formatMeters(meters: number): string {
-  if (!Number.isFinite(meters)) return "beyond float range";
-  const abs = Math.abs(meters);
-  if (abs < 1000) return `${meters.toFixed(meters < 10 ? 2 : 1)} m`;
-  const km = meters / 1000;
-  if (abs < 1e10) return `${km.toFixed(km < 100 ? 1 : 0)} km`;
-  return `${(meters / 9.4607304725808e15).toFixed(2)} LIGHT-YEARS`;
+/** log₁₀(|n|) from top bits — never stringifies megabit integers. */
+function mpzApproxLog10(g: Gmp, n: mpz_ptr): number {
+  if (g.mpz_sgn(n) === 0) return -Infinity;
+  const bits = g.mpz_sizeinbase(n, 2);
+  if (bits <= 53) {
+    const v = Number(g.mpz_to_string(n, 10));
+    return v > 0 ? Math.log10(v) : -Infinity;
+  }
+  return withTempRet(g, 1, ([top]) => {
+    const shift = bits - 53;
+    g.mpz_tdiv_q_2exp(top, n, shift);
+    const topNum = Number(g.mpz_to_string(top, 10));
+    return Math.log10(topNum) + shift * Math.log10(2);
+  });
 }
 
 /** Seed session from a Babel room base-32 string (any size). */

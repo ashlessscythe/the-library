@@ -154,6 +154,11 @@ Bearing from the Entrance uses `atan2(x, y)` with **0° = North**, **90° = East
 Unit ladder for `formatLibraryDistance`: meters → kilometers → AU → light-years  
 (`AU_METERS = 149_597_870_700`, `LIGHT_YEAR_METERS = 9_460_730_472_580_800`).
 
+When Euclidean float coords are unavailable (book-scale / estimated shells), physical
+distance falls back to **grid**: `shell × ROOM_SPACING_METERS`, formatted via
+`log₁₀` so megadigit room counts still resolve to AU or light-years (scientific
+exponents allowed).
+
 ## Relationship to book content
 
 ```text
