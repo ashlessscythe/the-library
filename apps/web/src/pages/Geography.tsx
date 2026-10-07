@@ -22,6 +22,7 @@ import {
   parseBase32,
   physicalLocationToBabelRoom,
   physicalLocationToRoomIndex,
+  randomBigIntBelow,
   roomDistanceFromOrigin,
   roomIndexToPhysicalLocation,
   roomToBase32,
@@ -36,6 +37,8 @@ import { bookPath } from "@/lib/routes";
 import { ensureRoomKey, resolveRoom } from "@/lib/rooms";
 
 const INPUT_DIGIT_CAP = 256;
+/** Uniform random geo index bound — vast, but short enough for UI fields. */
+const RANDOM_GEO_MAX = 10n ** 36n;
 const ROOM_CHAR_RE = new RegExp(`[^${BASE32_ALPHA}]`, "gi");
 
 const HORIZONTAL: PhysicalDirection[] = ["NW", "N", "NE", "SW", "S", "SE"];
@@ -200,6 +203,15 @@ export function Geography() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function jumpToRandom() {
+    try {
+      const geo = randomBigIntBelow(RANDOM_GEO_MAX);
+      applyLocation(roomIndexToPhysicalLocation(geo));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Random jump failed");
     }
   }
 
@@ -399,9 +411,23 @@ export function Geography() {
                 />
               </label>
             )}
-            <Button type="submit" size="sm">
-              Locate
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" size="sm">
+                Locate
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={jumpToRandom}
+              >
+                Jump to random
+              </Button>
+            </div>
+            <p className="font-mono text-[10px] text-[var(--dim)]">
+              Random picks a crypto-uniform geography index out to 10³⁶ — far
+              from the Entrance, still openable as a volume.
+            </p>
           </form>
         </Disclosure>
       </div>
