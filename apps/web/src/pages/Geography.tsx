@@ -73,10 +73,12 @@ function Disclosure({
   children: ReactNode;
   defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <details
       className="group border border-[var(--line)] bg-[var(--paper)] open:bg-[var(--panel)]"
-      defaultOpen={defaultOpen}
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
     >
       <summary className="cursor-pointer list-none px-4 py-3 font-mono text-[10px] uppercase tracking-[0.25em] text-[var(--muted)] marker:content-none hover:text-[var(--mark)] [&::-webkit-details-marker]:hidden">
         <span className="flex items-center justify-between gap-3">
