@@ -67,12 +67,19 @@ function formatRoomCharCount(n: number): string {
 function Disclosure({
   title,
   children,
+  defaultOpen = false,
 }: {
   title: string;
   children: ReactNode;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <details className="group border border-[var(--line)] bg-[var(--paper)] open:bg-[var(--panel)]">
+    <details
+      className="group border border-[var(--line)] bg-[var(--paper)] open:bg-[var(--panel)]"
+      open={open}
+      onToggle={(e) => setOpen(e.currentTarget.open)}
+    >
       <summary className="cursor-pointer list-none px-4 py-3 font-mono text-[10px] uppercase tracking-[0.25em] text-[var(--muted)] marker:content-none hover:text-[var(--mark)] [&::-webkit-details-marker]:hidden">
         <span className="flex items-center justify-between gap-3">
           <span>{title}</span>
@@ -447,8 +454,6 @@ export function Geography() {
         ) : null}
       </section>
 
-      <GeographyAbout />
-
       <div className="space-y-2">
         <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-[var(--dim)]">
           Details
@@ -482,7 +487,7 @@ export function Geography() {
           )}
         </Disclosure>
 
-        <Disclosure title="From the Entrance">
+        <Disclosure title="From the Entrance" defaultOpen>
           {largeMode ? (
             <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-[var(--fg)]">
               {[
@@ -603,6 +608,8 @@ export function Geography() {
           </form>
         </Disclosure>
       </div>
+
+      <GeographyAbout />
 
       <p className="font-mono text-[10px] text-[var(--dim)]">
         Mathematical addresses stay on{" "}

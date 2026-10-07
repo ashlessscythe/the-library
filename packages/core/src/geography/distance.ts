@@ -9,7 +9,11 @@ import {
   AU_METERS,
   COMPACT_DIGIT_BUDGET,
   FLOAT_SAFE_COORD,
+  GIGAPARSEC_METERS,
+  KILOPARSEC_METERS,
   LIGHT_YEAR_METERS,
+  MEGAPARSEC_METERS,
+  PARSEC_METERS,
   ROOM_SPACING_METERS,
   TECHNICAL_DIGIT_BUDGET,
   type PhysicalLocation,
@@ -200,7 +204,8 @@ function toSuperscript(n: number): string {
 
 /**
  * Format a meter distance with automatic unit selection.
- * meters → km → AU → light-years (scientific when the value overflows floats).
+ * meters → km → AU → light-years → pc → kpc → Mpc → Gpc;
+ * beyond readable Gpc → scientific light-years + BEYOND COSMOLOGICAL SCALE.
  */
 export function formatLibraryDistance(meters: number): string {
   if (!Number.isFinite(meters)) {
@@ -210,6 +215,9 @@ export function formatLibraryDistance(meters: number): string {
   return formatLibraryDistanceFromLog10Meters(Math.log10(Math.abs(meters)));
 }
 
+/** Max plain Gpc coefficient digits before falling back to scientific light-years. */
+const GPC_PLAIN_DIGIT_BUDGET = 6;
+
 /**
  * Same unit ladder as {@link formatLibraryDistance}, from log₁₀(meters).
  * Safe for shell radii whose meter length exceeds `Number.MAX_VALUE`.
@@ -218,8 +226,13 @@ export function formatLibraryDistanceFromLog10Meters(log10Meters: number): strin
   if (!Number.isFinite(log10Meters)) {
     return "beyond float range";
   }
+  // Constants fit in float well enough for log₁₀ unit selection only.
   const log10Au = Math.log10(Number(AU_METERS));
   const log10Ly = Math.log10(Number(LIGHT_YEAR_METERS));
+  const log10Pc = Math.log10(Number(PARSEC_METERS));
+  const log10Kpc = Math.log10(Number(KILOPARSEC_METERS));
+  const log10Mpc = Math.log10(Number(MEGAPARSEC_METERS));
+  const log10Gpc = Math.log10(Number(GIGAPARSEC_METERS));
 
   // meters
   if (log10Meters < 3) {
@@ -234,8 +247,28 @@ export function formatLibraryDistanceFromLog10Meters(log10Meters: number): strin
   if (log10Meters < log10Ly - 1) {
     return formatUnitFromLog10(log10Meters - log10Au, "AU", 6);
   }
-  // light-years (including megadigit exponents)
-  return formatUnitFromLog10(log10Meters - log10Ly, "LIGHT-YEARS", 6);
+  // light-years
+  if (log10Meters < log10Pc - 1) {
+    return formatUnitFromLog10(log10Meters - log10Ly, "light-years", 6);
+  }
+  // parsecs
+  if (log10Meters < log10Kpc - 1) {
+    return formatUnitFromLog10(log10Meters - log10Pc, "pc", 6);
+  }
+  // kiloparsecs
+  if (log10Meters < log10Mpc - 1) {
+    return formatUnitFromLog10(log10Meters - log10Kpc, "kpc", 6);
+  }
+  // megaparsecs
+  if (log10Meters < log10Gpc - 1) {
+    return formatUnitFromLog10(log10Meters - log10Mpc, "Mpc", 6);
+  }
+  // gigaparsecs while the coefficient stays plain / readable
+  if (log10Meters < log10Gpc + GPC_PLAIN_DIGIT_BUDGET) {
+    return formatUnitFromLog10(log10Meters - log10Gpc, "Gpc", GPC_PLAIN_DIGIT_BUDGET);
+  }
+  // Beyond readable Gpc: scientific light-years (no more obscure units).
+  return `${formatScientificMantissa(log10Meters - log10Ly)} light-years BEYOND COSMOLOGICAL SCALE`;
 }
 
 /**
