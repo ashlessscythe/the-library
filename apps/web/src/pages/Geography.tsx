@@ -12,9 +12,9 @@ import {
   babelRoomToPhysicalLocation,
   formatBearing,
   formatCompactBigInt,
+  formatGridDistanceFromShell,
   formatLibraryDistance,
   formatNearbyAscii,
-  formatPhysicalLocation,
   formatTechnicalCoordinates,
   euclideanMeters,
   move,
@@ -45,6 +45,32 @@ const INPUT_DIGIT_CAP = 256;
 const ROOM_CHAR_RE = new RegExp(`[^${BASE32_ALPHA}]`, "gi");
 
 const HORIZONTAL: PhysicalDirection[] = ["NW", "N", "NE", "SW", "S", "SE"];
+
+/** Display ladder anchors for the From-the-Entrance scales legend. */
+const SCALE_LEGEND: ReadonlyArray<{ unit: string; note: string }> = [
+  { unit: "m", note: "rooms" },
+  { unit: "km", note: "cities" },
+  { unit: "AU", note: "Earth–Sun" },
+  { unit: "ly", note: "stars" },
+  { unit: "pc", note: "nearby stars" },
+  { unit: "kpc", note: "galaxy" },
+  { unit: "Mpc", note: "clusters" },
+  { unit: "Gpc", note: "cosmos+" },
+];
+
+/** Which legend unit the current physical-distance label sits in. */
+function activeScaleUnit(label: string | null): string | null {
+  if (!label) return null;
+  if (/\bGpc\b/.test(label)) return "Gpc";
+  if (/\bMpc\b/.test(label)) return "Mpc";
+  if (/\bkpc\b/.test(label)) return "kpc";
+  if (/(?<![A-Za-z])pc(?![A-Za-z])/.test(label)) return "pc";
+  if (/light-years/i.test(label)) return "ly";
+  if (/\bAU\b/.test(label)) return "AU";
+  if (/\bkm\b/.test(label)) return "km";
+  if (/\bm\b/.test(label)) return "m";
+  return null;
+}
 
 function sanitizeBase32(raw: string): string {
   return raw.toLowerCase().replace(ROOM_CHAR_RE, "").slice(0, INPUT_DIGIT_CAP);
@@ -92,6 +118,89 @@ function Disclosure({
         {children}
       </div>
     </details>
+  );
+}
+
+function EntranceFact({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0 space-y-0.5">
+      <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--dim)] sm:text-[10px]">
+        {label}
+      </p>
+      <p className="break-words font-mono text-[11px] leading-snug text-[var(--fg)] sm:text-xs">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function FromTheEntrancePanel({
+  distanceRooms,
+  level,
+  bearing,
+  physicalDistance,
+}: {
+  distanceRooms: string;
+  level: string;
+  bearing: string | null;
+  physicalDistance: string | null;
+}) {
+  const active = activeScaleUnit(physicalDistance);
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:gap-6">
+      <div className="min-w-0 space-y-3 border-r border-[var(--line)] pr-3 sm:pr-6">
+        <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-[var(--mark)] sm:text-[10px]">
+          Place
+        </p>
+        <div className="space-y-3">
+          <EntranceFact label="Distance" value={`${distanceRooms} rooms`} />
+          <EntranceFact label="Level" value={level} />
+          {bearing ? <EntranceFact label="Bearing" value={bearing} /> : null}
+          {physicalDistance ? (
+            <EntranceFact label="Physical distance" value={physicalDistance} />
+          ) : null}
+        </div>
+      </div>
+
+      <div className="min-w-0">
+        <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.25em] text-[var(--dim)] sm:text-[10px]">
+          Scales
+        </p>
+        <table className="w-full border-collapse font-mono text-[10px] leading-tight sm:text-[11px]">
+          <tbody>
+            {SCALE_LEGEND.map((row) => {
+              const on = row.unit === active;
+              return (
+                <tr
+                  key={row.unit}
+                  className={
+                    on
+                      ? "text-[var(--mark)]"
+                      : "text-[var(--muted)]"
+                  }
+                >
+                  <th
+                    scope="row"
+                    className={`py-0.5 pr-2 text-left font-normal uppercase tracking-wider ${
+                      on ? "text-[var(--mark)]" : "text-[var(--dim)]"
+                    }`}
+                  >
+                    {row.unit}
+                  </th>
+                  <td className="min-w-0 py-0.5 break-words">{row.note}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
@@ -320,6 +429,11 @@ export function Geography() {
   const geoDisplay = largeMode
     ? largeSnap.geoCompact
     : formatCompactBigInt(geo!);
+  const physicalDistanceLabel = largeMode
+    ? largeSnap.physicalDistanceLabel
+    : euc != null
+      ? formatLibraryDistance(euc)
+      : formatGridDistanceFromShell(shell!);
   const distLabel = largeMode
     ? largeSnap.physicalDistanceLabel
     : euc != null
@@ -488,29 +602,14 @@ export function Geography() {
         </Disclosure>
 
         <Disclosure title="From the Entrance" defaultOpen>
-          {largeMode ? (
-            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-[var(--fg)]">
-              {[
-                "FROM THE ENTRANCE",
-                "",
-                "DISTANCE",
-                `${largeSnap.shellCompact} ROOMS`,
-                "",
-                "LEVEL",
-                largeSnap.levelCompact,
-                ...(largeSnap.bearing
-                  ? ["", "BEARING", largeSnap.bearing]
-                  : []),
-                ...(largeSnap.physicalDistanceLabel
-                  ? ["", "PHYSICAL DISTANCE", largeSnap.physicalDistanceLabel]
-                  : []),
-              ].join("\n")}
-            </pre>
-          ) : (
-            <pre className="overflow-x-auto whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-[var(--fg)]">
-              {formatPhysicalLocation(location)}
-            </pre>
-          )}
+          <FromTheEntrancePanel
+            distanceRooms={
+              largeMode ? largeSnap.shellCompact : formatCompactBigInt(shell!)
+            }
+            level={levelDisplay}
+            bearing={bearing}
+            physicalDistance={physicalDistanceLabel}
+          />
         </Disclosure>
 
         <Disclosure title="Technical coordinates">
