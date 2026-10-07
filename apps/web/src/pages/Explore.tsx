@@ -76,6 +76,9 @@ type FieldProps = {
   invalid?: boolean;
   maxLength?: number;
   readOnly?: boolean;
+  /** When set, show ± steppers clamped to this range. */
+  min?: number;
+  max?: number;
 };
 
 function CoordField({
@@ -88,7 +91,20 @@ function CoordField({
   invalid,
   maxLength,
   readOnly,
+  min,
+  max,
 }: FieldProps) {
+  const steppers = min != null && max != null && !readOnly;
+  const n = Number(value);
+  const atMin = !Number.isInteger(n) || n <= min!;
+  const atMax = !Number.isInteger(n) || n >= max!;
+
+  const step = (delta: number) => {
+    const base = Number.isInteger(n) ? n : min!;
+    const next = Math.min(max!, Math.max(min!, base + delta));
+    onChange(String(next));
+  };
+
   return (
     <label className="space-y-1">
       <span className="flex items-baseline justify-between gap-2">
@@ -97,21 +113,48 @@ function CoordField({
         </span>
         <span className="font-mono text-[10px] text-[var(--dim)]">{hint}</span>
       </span>
-      <Input
-        value={value}
-        inputMode={inputMode}
-        autoComplete="off"
-        spellCheck={false}
-        maxLength={maxLength}
-        readOnly={readOnly}
-        aria-invalid={invalid || undefined}
-        className={cn(
-          invalid && "border-red-500/70 focus-visible:ring-red-400",
-          readOnly && "opacity-80"
+      <span className={cn("relative block", steppers && "pr-0")}>
+        <Input
+          value={value}
+          inputMode={inputMode}
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={maxLength}
+          readOnly={readOnly}
+          aria-invalid={invalid || undefined}
+          className={cn(
+            invalid && "border-red-500/70 focus-visible:ring-red-400",
+            readOnly && "opacity-80",
+            steppers && "pr-8"
+          )}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onBlur}
+        />
+        {steppers && (
+          <span className="absolute inset-y-0 right-0 flex w-7 flex-col border-l border-[var(--line)]">
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={`Increase ${label}`}
+              disabled={atMax}
+              className="flex flex-1 items-center justify-center text-[10px] leading-none text-[var(--muted)] hover:bg-[var(--panel)] hover:text-[var(--mark)] disabled:opacity-30"
+              onClick={() => step(1)}
+            >
+              ▲
+            </button>
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={`Decrease ${label}`}
+              disabled={atMin}
+              className="flex flex-1 items-center justify-center border-t border-[var(--line)] text-[10px] leading-none text-[var(--muted)] hover:bg-[var(--panel)] hover:text-[var(--mark)] disabled:opacity-30"
+              onClick={() => step(-1)}
+            >
+              ▼
+            </button>
+          </span>
         )}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
-      />
+      </span>
     </label>
   );
 }
@@ -400,6 +443,8 @@ export function Explore() {
           label="Wall"
           hint={`1–${WALLS}`}
           value={wall}
+          min={1}
+          max={WALLS}
           invalid={touched && (wall === "" || Number(wall) < 1 || Number(wall) > WALLS)}
           onChange={(v) => setWall(sanitizeIntField(v, 1, WALLS))}
           onBlur={() => {
@@ -410,6 +455,8 @@ export function Explore() {
           label="Shelf"
           hint={`1–${SHELVES}`}
           value={shelf}
+          min={1}
+          max={SHELVES}
           invalid={touched && (shelf === "" || Number(shelf) < 1 || Number(shelf) > SHELVES)}
           onChange={(v) => setShelf(sanitizeIntField(v, 1, SHELVES))}
           onBlur={() => {
@@ -420,6 +467,8 @@ export function Explore() {
           label="Book"
           hint={`1–${BOOKS}`}
           value={book}
+          min={1}
+          max={BOOKS}
           invalid={touched && (book === "" || Number(book) < 1 || Number(book) > BOOKS)}
           onChange={(v) => setBook(sanitizeIntField(v, 1, BOOKS))}
           onBlur={() => {
@@ -430,6 +479,8 @@ export function Explore() {
           label="Page"
           hint={`1–${PAGES}`}
           value={page}
+          min={1}
+          max={PAGES}
           invalid={touched && (page === "" || Number(page) < 1 || Number(page) > PAGES)}
           onChange={(v) => setPage(sanitizeIntField(v, 1, PAGES))}
           onBlur={() => {
