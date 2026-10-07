@@ -3,6 +3,7 @@ import { Shell } from "@/components/layout/Shell";
 import { About } from "@/pages/About";
 import { DevGeography } from "@/pages/DevGeography";
 import { Explore } from "@/pages/Explore";
+import { Geography } from "@/pages/Geography";
 import { Home } from "@/pages/Home";
 import { Random } from "@/pages/Random";
 import { Reader } from "@/pages/Reader";
@@ -16,6 +17,7 @@ export default function App() {
           <Route index element={<Home />} />
           <Route path="search" element={<Search />} />
           <Route path="explore" element={<Explore />} />
+          <Route path="geography" element={<Geography />} />
           <Route path="about" element={<About />} />
           <Route path="random" element={<Random />} />
           <Route path="dev/geography" element={<DevGeography />} />

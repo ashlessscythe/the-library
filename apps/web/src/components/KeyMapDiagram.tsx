@@ -1,4 +1,5 @@
 import type { MoveDirection } from "@the-library/core";
+import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 type KeyProps = {
@@ -143,6 +144,15 @@ export function KeyMapDiagram({
           onMove={onMove}
         />
       </div>
+
+      <p className="border-t border-[var(--line)] pt-3 text-center">
+        <Link
+          to="/geography"
+          className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--dim)] no-underline hover:text-[var(--mark)]"
+        >
+          Geography
+        </Link>
+      </p>
     </figure>
   );
 }

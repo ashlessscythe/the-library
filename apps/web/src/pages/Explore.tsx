@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BASE32_ALPHA,
   BOOKS,
@@ -419,6 +419,14 @@ export function Explore() {
               Loaded from the page you were reading.
             </span>
           )}
+        </p>
+        <p>
+          <Link
+            to="/geography"
+            className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--dim)] no-underline hover:text-[var(--mark)]"
+          >
+            Navigate by geography →
+          </Link>
         </p>
       </div>
 
