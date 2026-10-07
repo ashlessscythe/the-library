@@ -15,8 +15,6 @@ export type GeographySnapshot = {
   babelRoomShort: string;
   bearing: string | null;
   physicalDistanceLabel: string | null;
-  /** Full babel room (base-32) — only for open-volume; may be huge. */
-  babelRoom: string;
 };
 
 type Gmp = GMPFunctions;
@@ -25,6 +23,8 @@ let binding: Gmp | null = null;
 let qPtr: mpz_ptr | null = null;
 let rPtr: mpz_ptr | null = null;
 let levelPtr: mpz_ptr | null = null;
+/** Full babel room for the current session — never sent to the UI. */
+let sessionBabelRoom: string | null = null;
 
 export function attachGmpGeography(g: Gmp): void {
   binding = g;
@@ -43,6 +43,7 @@ function clearSession(): void {
     g.mpz_clears(qPtr, rPtr!, levelPtr!);
     qPtr = rPtr = levelPtr = null;
   }
+  sessionBabelRoom = null;
 }
 
 function ensureSession(): { q: mpz_ptr; r: mpz_ptr; level: mpz_ptr } {
@@ -513,11 +514,12 @@ function shellDistance(
   });
 }
 
-function snapshotFromSession(g: Gmp, babelRoom: string): GeographySnapshot {
+function snapshotFromSession(g: Gmp): GeographySnapshot {
   const { q, r, level } = ensureSession();
+  const babelRoom = sessionBabelRoom ?? "1";
   return withTempRet(g, 2, ([shell, geo]) => {
     shellDistance(g, q, r, level, shell);
-    // geo = physicalLocationToRoomIndex — expensive; derive from babelRoom-1 for display
+    // geo ≈ babelRoom − 1 for display (avoid re-ranking)
     const roomMpz = g.mpz_t();
     g.mpz_init(roomMpz);
     g.mpz_set_string(roomMpz, babelRoom, 32);
@@ -528,7 +530,6 @@ function snapshotFromSession(g: Gmp, babelRoom: string): GeographySnapshot {
     const signedLevel =
       g.mpz_sgn(level) > 0 ? `+${levelCompact}` : levelCompact;
 
-    // Bearing only when coords fit float
     let bearing: string | null = null;
     let physicalDistanceLabel: string | null = null;
     const qBits = g.mpz_sizeinbase(q, 2);
@@ -569,7 +570,6 @@ function snapshotFromSession(g: Gmp, babelRoom: string): GeographySnapshot {
       babelRoomShort: shortenRoom(babelRoom),
       bearing,
       physicalDistanceLabel,
-      babelRoom,
     };
   });
 }
@@ -605,7 +605,8 @@ export function gmpGeographySeedFromRoom(roomRaw: string): GeographySnapshot {
     g.mpz_sub_ui(geo, babel, 1);
     roomIndexToPhysical(g, geo, q, r, level);
   });
-  return snapshotFromSession(g, room);
+  sessionBabelRoom = room;
+  return snapshotFromSession(g);
 }
 
 export function gmpGeographyResetEntrance(): GeographySnapshot {
@@ -614,7 +615,8 @@ export function gmpGeographyResetEntrance(): GeographySnapshot {
   g.mpz_set_ui(q, 0);
   g.mpz_set_ui(r, 0);
   g.mpz_set_ui(level, 0);
-  return snapshotFromSession(g, "1");
+  sessionBabelRoom = "1";
+  return snapshotFromSession(g);
 }
 
 const MOVE_DELTA: Record<
@@ -645,9 +647,9 @@ export function gmpGeographyMove(direction: PhysicalDirection): GeographySnapsho
     else if (dr < 0) g.mpz_sub_ui(r, r, -dr);
   }
 
-  // Convert physical → babel room via ranking
-  const room = physicalToBabelRoom(g, q, r, level);
-  return snapshotFromSession(g, room);
+  // Convert physical → babel room via ranking (kept in worker only)
+  sessionBabelRoom = physicalToBabelRoom(g, q, r, level);
+  return snapshotFromSession(g);
 }
 
 function physicalToBabelRoom(
@@ -820,8 +822,11 @@ function rankInShell(
   });
 }
 
+/** Full babel room for open-volume — may be megabytes; call only when opening. */
 export function gmpGeographyGetBabelRoom(): string {
+  if (sessionBabelRoom) return sessionBabelRoom;
   const g = gmp();
   const { q, r, level } = ensureSession();
-  return physicalToBabelRoom(g, q, r, level);
+  sessionBabelRoom = physicalToBabelRoom(g, q, r, level);
+  return sessionBabelRoom;
 }

@@ -145,6 +145,14 @@ export function useLibraryEngine() {
     });
   }, []);
 
+  const geographyGetRoom = useCallback(async () => {
+    await ensureInit();
+    return call<string>({
+      id: nextRequestId(),
+      type: "geographyGetRoom",
+    });
+  }, []);
+
   return {
     ready,
     error,
@@ -155,5 +163,6 @@ export function useLibraryEngine() {
     geographySeed,
     geographyMove,
     geographyReset,
+    geographyGetRoom,
   };
 }

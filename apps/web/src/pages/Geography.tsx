@@ -1,7 +1,6 @@
 import {
   useEffect,
   useMemo,
-  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -94,14 +93,14 @@ export function Geography() {
     geographySeed,
     geographyMove,
     geographyReset,
+    geographyGetRoom,
   } = useLibraryEngine();
 
   const [location, setLocation] = useState<PhysicalLocation>(() =>
     roomIndexToPhysicalLocation(0n)
   );
-  /** GMP session snapshot for book-scale rooms (never put full ids in inputs). */
+  /** GMP session snapshot for book-scale rooms (compact fields only). */
   const [largeSnap, setLargeSnap] = useState<GeographySnapshot | null>(null);
-  const largeRoomRef = useRef<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(Boolean(seed?.roomKey));
@@ -132,7 +131,6 @@ export function Geography() {
 
   function applySyncLocation(next: PhysicalLocation) {
     setLargeSnap(null);
-    largeRoomRef.current = null;
     setLocation(next);
     const nextGeo = physicalLocationToRoomIndex(next);
     const nextBabel = physicalLocationToBabelRoom(next);
@@ -143,8 +141,7 @@ export function Geography() {
 
   function applyLargeSnap(snap: GeographySnapshot) {
     setLargeSnap(snap);
-    largeRoomRef.current = snap.babelRoom;
-    // Keep jump fields empty-ish so we never paste megabyte strings into inputs.
+    // Never put megabyte room ids into controlled inputs.
     setBabelRoom("");
     setGeoIndex("");
     setError(null);
@@ -232,7 +229,7 @@ export function Geography() {
     setError(null);
     try {
       const roomString = largeMode
-        ? largeRoomRef.current ?? largeSnap!.babelRoom
+        ? await geographyGetRoom()
         : roomToBase32(physicalLocationToBabelRoom(location));
       const roomKey = await ensureRoomKey(roomString);
       navigate(

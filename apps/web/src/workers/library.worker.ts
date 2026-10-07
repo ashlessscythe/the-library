@@ -17,6 +17,7 @@ import {
   initGmpEngine,
 } from "./gmpEngine";
 import {
+  gmpGeographyGetBabelRoom,
   gmpGeographyMove,
   gmpGeographyResetEntrance,
   gmpGeographySeedFromRoom,
@@ -47,7 +48,8 @@ export type WorkerRequest =
   | { id: number; type: "random" }
   | { id: number; type: "geographySeed"; room: string }
   | { id: number; type: "geographyMove"; direction: PhysicalDirection }
-  | { id: number; type: "geographyReset" };
+  | { id: number; type: "geographyReset" }
+  | { id: number; type: "geographyGetRoom" };
 
 export type WorkerResponse =
   | { id: number; ok: true; result: unknown }
@@ -136,6 +138,12 @@ async function handleMessage(msg: WorkerRequest): Promise<void> {
         ensureReady();
         const snap: GeographySnapshot = gmpGeographyResetEntrance();
         postMessage({ id: msg.id, ok: true, result: snap } satisfies WorkerResponse);
+        break;
+      }
+      case "geographyGetRoom": {
+        ensureReady();
+        const room = gmpGeographyGetBabelRoom();
+        postMessage({ id: msg.id, ok: true, result: room } satisfies WorkerResponse);
         break;
       }
       default:
