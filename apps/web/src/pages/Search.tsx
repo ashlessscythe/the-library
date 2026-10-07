@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useLibraryEngine } from "@/hooks/useLibraryEngine";
 import { bookPathFromIdentifier } from "@/lib/routes";
+import { sanitizeSearchQuery } from "@/lib/searchText";
 
 type Mode = "empty" | "emptybook" | "chars" | "space";
 
@@ -24,12 +25,15 @@ export function Search() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!query.trim() || !ready) return;
+    const q = sanitizeSearchQuery(query).trim();
+    if (!q || !ready) return;
     setBusy(true);
     setError(null);
     try {
-      const result = await search(query.trim().toLowerCase(), mode);
-      navigate(await bookPathFromIdentifier(result.identifier));
+      const result = await search(q, mode);
+      navigate(await bookPathFromIdentifier(result.identifier), {
+        state: { searchQuery: q },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {
@@ -49,7 +53,8 @@ export function Search() {
           <h1 className="font-[family-name:var(--font-display)] text-5xl">Search</h1>
           <p className="font-serif text-lg text-[var(--muted)]">
             Search does not scan the library. It constructs a book that contains
-            your text, then finds the unique coordinate for that book.
+            your text, then finds the unique coordinate for that book. Only
+            a–z, space, and .,!?- are kept as you type.
           </p>
         </div>
       </div>
@@ -57,8 +62,10 @@ export function Search() {
       <form onSubmit={onSubmit} className="space-y-4">
         <Textarea
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => setQuery(sanitizeSearchQuery(e.target.value))}
           placeholder="what you hope to find"
+          spellCheck={false}
+          autoComplete="off"
           rows={5}
         />
         <fieldset className="grid gap-2 sm:grid-cols-2">

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import type { MoveDirection, PageContent } from "@the-library/core";
 import { PAGES, shortenRoom } from "@the-library/core";
 import { Trackball } from "@/components/Trackball";
@@ -7,24 +7,23 @@ import { Button } from "@/components/ui/button";
 import { useLibraryEngine } from "@/hooks/useLibraryEngine";
 import { useTravelKeys } from "@/hooks/useTravelKeys";
 import { addBookmark } from "@/lib/bookmarks";
+import { formatPageNodes } from "@/lib/highlight";
 import {
   bookPathFromIdentifier,
   resolveIdentifierFromParams,
 } from "@/lib/routes";
 
-function formatPageText(content: string): string {
-  const lines: string[] = [];
-  for (let i = 0; i < content.length; i += 80) {
-    lines.push(content.slice(i, i + 80));
-  }
-  return lines
-    .map((line, idx) => `${String(idx + 1).padStart(2, " ")}  ${line}`)
-    .join("\n");
-}
+export type ReaderLocationState = {
+  searchQuery?: string;
+};
 
 export function Reader() {
   const params = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchState = (location.state as ReaderLocationState | null) ?? null;
+  const searchQuery = searchState?.searchQuery?.trim() || null;
+
   const { ready, error: engineError, generatePage, move } = useLibraryEngine();
   const [identifier, setIdentifier] = useState<string | null>(null);
   const [page, setPage] = useState<PageContent | null>(null);
@@ -32,6 +31,12 @@ export function Reader() {
   const [error, setError] = useState<string | null>(null);
   const [hudKey, setHudKey] = useState(0);
   const [busyMove, setBusyMove] = useState(false);
+  const [highlightSearch, setHighlightSearch] = useState(Boolean(searchQuery));
+
+  // Keep toggle available when arriving from search; reset if query changes.
+  useEffect(() => {
+    setHighlightSearch(Boolean(searchQuery));
+  }, [searchQuery]);
 
   // Resolve @hash → full room, then generate
   useEffect(() => {
@@ -86,19 +91,30 @@ export function Reader() {
       setBusyMove(true);
       try {
         const next = await move(identifier, direction);
-        navigate(await bookPathFromIdentifier(next));
+        // Preserve search highlight state across lattice travel.
+        navigate(await bookPathFromIdentifier(next), {
+          state: searchQuery ? { searchQuery } : undefined,
+        });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Move failed");
       } finally {
         setBusyMove(false);
       }
     },
-    [busyMove, ready, move, identifier, navigate]
+    [busyMove, ready, move, identifier, navigate, searchQuery]
   );
 
   useTravelKeys(ready && !loading && !!identifier, onMove);
 
   const roomShort = page ? shortenRoom(page.room) : "…";
+
+  let pageNodes: ReactNode = null;
+  if (page) {
+    pageNodes = formatPageNodes(
+      page.content,
+      highlightSearch && searchQuery ? searchQuery : null
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-[minmax(0,1fr)_13rem] md:gap-8 md:items-start">
@@ -119,6 +135,17 @@ export function Reader() {
             P{page?.page ?? "—"}
           </div>
           <div className="flex flex-wrap gap-2">
+            {searchQuery && (
+              <label className="inline-flex h-8 cursor-pointer items-center gap-2 border border-[var(--line)] px-3 font-mono text-xs text-[var(--muted)] hover:border-[var(--mark)]">
+                <input
+                  type="checkbox"
+                  className="accent-[var(--mark)]"
+                  checked={highlightSearch}
+                  onChange={(e) => setHighlightSearch(e.target.checked)}
+                />
+                Highlight search
+              </label>
+            )}
             <Button
               type="button"
               size="sm"
@@ -161,7 +188,7 @@ export function Reader() {
         ) : (
           <>
             <pre className="page-lines w-full border border-[var(--line)] bg-[var(--paper)] p-4 text-[var(--fg)] sm:p-5">
-              {formatPageText(page.content)}
+              {pageNodes}
             </pre>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Button
@@ -180,7 +207,9 @@ export function Reader() {
                   onChange={async (e) => {
                     if (!identifier) return;
                     const next = identifier.replace(/\.\d+$/, `.${e.target.value}`);
-                    navigate(await bookPathFromIdentifier(next));
+                    navigate(await bookPathFromIdentifier(next), {
+                      state: searchQuery ? { searchQuery } : undefined,
+                    });
                   }}
                 >
                   {Array.from({ length: PAGES }, (_, i) => i + 1).map((n) => (

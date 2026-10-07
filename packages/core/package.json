@@ -12,7 +12,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:heavy": "vitest run --config vitest.heavy.config.ts"
+    "test:heavy": "vitest run --config vitest.heavy.config.ts",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "typescript": "^5.8.3",

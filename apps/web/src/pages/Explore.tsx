@@ -20,7 +20,6 @@ import {
   importBookmarksJson,
   loadBookmarks,
   migrateBookmarks,
-  parseCurrentFromImport,
   toCoordinateExport,
   type Bookmark,
 } from "@/lib/bookmarks";
@@ -316,7 +315,7 @@ export function Explore() {
             currentFields.page
           )
         : null;
-      const json = exportLibraryJson(current);
+      const json = await exportLibraryJson(current);
       const blob = new Blob([json], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -333,18 +332,18 @@ export function Explore() {
     if (!file) return;
     try {
       const text = await file.text();
-      const current = parseCurrentFromImport(text);
-      setBookmarks(await importBookmarksJson(text));
+      const { bookmarks: next, current } = await importBookmarksJson(text);
+      setBookmarks(next);
       if (current) {
-        const fullRoom = await resolveRoom(current.roomKey);
-        if (fullRoom.length > ROOM_INPUT_MAX) {
-          fullRoomRef.current = fullRoom;
+        // Full room is ephemeral: hold in a ref for submit, show slug in the input.
+        if (current.room.length > ROOM_INPUT_MAX) {
+          fullRoomRef.current = current.room;
           setRoomLocked(true);
           setRoom(current.roomKey);
         } else {
           fullRoomRef.current = null;
           setRoomLocked(false);
-          setRoom(fullRoom);
+          setRoom(current.room);
         }
         setRoomEpoch((n) => n + 1);
         setWall(String(current.wall));
