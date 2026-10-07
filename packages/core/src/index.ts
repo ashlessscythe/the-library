@@ -6,6 +6,7 @@
 export * from "./constants";
 export * from "./coordinates/identifier";
 export * from "./coordinates/move";
+export * from "./geography";
 export * from "./mathematics/base32";
 export * from "./mathematics/numbers";
 export * from "./generation/content";

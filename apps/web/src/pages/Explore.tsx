@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BASE32_ALPHA,
   BOOKS,
@@ -12,6 +12,7 @@ import {
 } from "@the-library/core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { GeographyLocationState } from "@/lib/geographyNav";
 import { bookPath } from "@/lib/routes";
 import { ensureRoomKey, resolveRoom } from "@/lib/rooms";
 import {
@@ -186,6 +187,10 @@ export function Explore() {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => loadBookmarks());
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
+  /** Short room key for seeding /geography (literal or @hash). */
+  const [geographyRoomKey, setGeographyRoomKey] = useState<string | undefined>(
+    "1"
+  );
 
   // Seed from reader using compact roomKey only (resolve full room into a ref).
   useEffect(() => {
@@ -233,6 +238,32 @@ export function Explore() {
       cancelled = true;
     };
   }, []);
+
+  // Keep a compact roomKey so Geography opens at the coordinates on this form.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (room.startsWith("@")) {
+          if (!cancelled) setGeographyRoomKey(room);
+          return;
+        }
+        const full =
+          fullRoomRef.current ?? normalizeRoomString(sanitizeRoom(room));
+        if (!full || full === "0" || !/^[0-9a-v]+$/i.test(full)) {
+          if (!cancelled) setGeographyRoomKey(undefined);
+          return;
+        }
+        const key = await ensureRoomKey(full);
+        if (!cancelled) setGeographyRoomKey(key);
+      } catch {
+        if (!cancelled) setGeographyRoomKey(undefined);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [room, roomLocked, roomEpoch]);
 
   const roomDisplay = roomLocked
     ? room.startsWith("@")
@@ -419,6 +450,19 @@ export function Explore() {
               Loaded from the page you were reading.
             </span>
           )}
+        </p>
+        <p>
+          <Link
+            to="/geography"
+            state={
+              geographyRoomKey
+                ? ({ roomKey: geographyRoomKey } satisfies GeographyLocationState)
+                : undefined
+            }
+            className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--dim)] no-underline hover:text-[var(--mark)]"
+          >
+            Navigate by geography →
+          </Link>
         </p>
       </div>
 

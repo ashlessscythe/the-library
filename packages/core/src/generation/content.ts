@@ -6,9 +6,13 @@
 
 import {
   ALPHA,
+  BASE32_ALPHA,
   BOOK_LENGTH,
+  BOOKS,
   PAGE_LENGTH,
   PAGES,
+  SHELVES,
+  WALLS,
 } from "../constants";
 import {
   coordinateFromSequential,
@@ -225,23 +229,76 @@ export function randomBigIntBelow(
   }
 }
 
+/** High-res U(0,1) for length draws (avoids `Math.random` / rejection loops). */
+function randomUnitInterval(
+  fillRandom: (bytes: Uint8Array) => void
+): number {
+  const bytes = new Uint8Array(7); // 56 bits → exact in IEEE floats
+  fillRandom(bytes);
+  let n = 0;
+  for (let i = 0; i < 7; i++) n = n * 256 + bytes[i];
+  return n / 0x1_0000_0000_0000_00; // 2^56
+}
+
 /**
- * Random page identifier, uniform over the library (babel-v3).
- * Picks a sequential book index in `[1, N]` and a random page.
+ * Log-uniform room length in `[1, maxLength]`.
+ * Equal probability mass per order of magnitude — short, ~tens of thousands,
+ * and book-scale all appear in ordinary use. Value-uniform `[1, N]` (and even
+ * length-uniform over a million-wide range) concentrates on huge ids.
+ */
+export function randomRoomLength(
+  maxLength: number = BOOK_LENGTH,
+  fillRandom: (bytes: Uint8Array) => void = fillCryptoRandom
+): number {
+  if (!Number.isInteger(maxLength) || maxLength < 1) {
+    throw new Error("maxLength must be an integer ≥ 1");
+  }
+  if (maxLength === 1) return 1;
+  const u = randomUnitInterval(fillRandom);
+  // maxLength^u ∈ [1, maxLength]; clamp against float edge cases.
+  const length = Math.round(Math.pow(maxLength, u));
+  return Math.max(1, Math.min(maxLength, length));
+}
+
+/**
+ * Random Babel room string with log-uniform length in `[1, maxLength]`.
+ *
+ * Digits are crypto-uniform over the base-32 alphabet. The leading digit is
+ * chosen in `[1, 31]` (never `0`) so the room is always ≥ 1.
+ */
+export function randomRoomString(
+  maxLength: number = BOOK_LENGTH,
+  fillRandom: (bytes: Uint8Array) => void = fillCryptoRandom
+): string {
+  const length = randomRoomLength(maxLength, fillRandom);
+  const bytes = new Uint8Array(length);
+  fillRandom(bytes);
+  const chars = new Array<string>(length);
+  // Map 0–255 → 1–31; tiny modulo bias, never hangs on a zero-only fill.
+  chars[0] = BASE32_ALPHA[1 + (bytes[0] % 31)];
+  for (let i = 1; i < length; i++) {
+    chars[i] = BASE32_ALPHA[bytes[i] & 31];
+  }
+  return chars.join("");
+}
+
+/**
+ * Random page identifier (babel-v3).
+ *
+ * Room length is log-uniform in `[1, maxRoomLength]` (see {@link randomRoomString});
+ * wall / shelf / book / page are uniform over their geometry bounds.
+ * Value-uniform sampling over `[1, N]` is intentionally avoided — it almost
+ * always produces ~`BOOK_LENGTH`-digit rooms.
  */
 export function randomIdentifier(
   fillRandom: (bytes: Uint8Array) => void = fillCryptoRandom,
-  random: () => number = Math.random
+  random: () => number = Math.random,
+  maxRoomLength: number = BOOK_LENGTH
 ): string {
-  const { N } = getLibraryConstants();
-  const seq = randomBigIntBelow(N, fillRandom) + 1n;
+  const roomString = randomRoomString(maxRoomLength, fillRandom);
+  const wall = 1 + Math.floor(random() * WALLS);
+  const shelf = 1 + Math.floor(random() * SHELVES);
+  const book = 1 + Math.floor(random() * BOOKS);
   const page = 1 + Math.floor(random() * PAGES);
-  const coord = coordinateFromSequential(seq, page);
-  return formatIdentifier(
-    coord.roomString,
-    coord.wall,
-    coord.shelf,
-    coord.book,
-    coord.page
-  );
+  return formatIdentifier(roomString, wall, shelf, book, page);
 }

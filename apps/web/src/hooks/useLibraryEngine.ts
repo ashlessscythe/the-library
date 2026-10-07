@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MoveDirection, PageContent } from "@the-library/core";
-import type { WorkerRequest, WorkerResponse } from "@/workers/library.worker";
+import type {
+  MoveDirection,
+  PageContent,
+  PhysicalDirection,
+} from "@the-library/core";
+import type {
+  GeographySnapshot,
+  WorkerRequest,
+  WorkerResponse,
+} from "@/workers/library.worker";
 
 type Pending = {
   resolve: (value: unknown) => void;
@@ -111,5 +119,50 @@ export function useLibraryEngine() {
     return call<string>({ id: nextRequestId(), type: "random" });
   }, []);
 
-  return { ready, error, generatePage, search, move, random };
+  const geographySeed = useCallback(async (room: string) => {
+    await ensureInit();
+    return call<GeographySnapshot>({
+      id: nextRequestId(),
+      type: "geographySeed",
+      room,
+    });
+  }, []);
+
+  const geographyMove = useCallback(async (direction: PhysicalDirection) => {
+    await ensureInit();
+    return call<GeographySnapshot>({
+      id: nextRequestId(),
+      type: "geographyMove",
+      direction,
+    });
+  }, []);
+
+  const geographyReset = useCallback(async () => {
+    await ensureInit();
+    return call<GeographySnapshot>({
+      id: nextRequestId(),
+      type: "geographyReset",
+    });
+  }, []);
+
+  const geographyGetRoom = useCallback(async () => {
+    await ensureInit();
+    return call<string>({
+      id: nextRequestId(),
+      type: "geographyGetRoom",
+    });
+  }, []);
+
+  return {
+    ready,
+    error,
+    generatePage,
+    search,
+    move,
+    random,
+    geographySeed,
+    geographyMove,
+    geographyReset,
+    geographyGetRoom,
+  };
 }

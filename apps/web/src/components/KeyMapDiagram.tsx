@@ -1,4 +1,6 @@
 import type { MoveDirection } from "@the-library/core";
+import { Link } from "react-router-dom";
+import type { GeographyLocationState } from "@/lib/geographyNav";
 import { cn } from "@/lib/utils";
 
 type KeyProps = {
@@ -58,9 +60,12 @@ function Key({ label, sub, wide, className, direction, onMove }: KeyProps) {
 export function KeyMapDiagram({
   onMove,
   className,
+  geographyState,
 }: {
   onMove?: (direction: MoveDirection) => void;
   className?: string;
+  /** When set, Geography opens at this room. */
+  geographyState?: GeographyLocationState;
 }) {
   return (
     <figure
@@ -143,6 +148,16 @@ export function KeyMapDiagram({
           onMove={onMove}
         />
       </div>
+
+      <p className="border-t border-[var(--line)] pt-3 text-center">
+        <Link
+          to="/geography"
+          state={geographyState}
+          className="font-mono text-[9px] uppercase tracking-[0.2em] text-[var(--dim)] no-underline hover:text-[var(--mark)]"
+        >
+          Geography
+        </Link>
+      </p>
     </figure>
   );
 }

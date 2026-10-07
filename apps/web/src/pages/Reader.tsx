@@ -233,7 +233,14 @@ export function Reader() {
       </div>
 
       <aside className="order-2 flex justify-center md:sticky md:top-8 md:justify-start md:self-start">
-        <Trackball onMove={onMove} />
+        <Trackball
+          onMove={onMove}
+          geographyState={
+            params.room
+              ? { roomKey: decodeURIComponent(params.room) }
+              : undefined
+          }
+        />
       </aside>
     </div>
   );

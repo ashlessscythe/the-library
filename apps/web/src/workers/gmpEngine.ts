@@ -18,9 +18,11 @@ import {
   PAGES,
   SHELVES,
   WALLS,
+  randomIdentifier,
   type MoveDirection,
   type PageContent,
 } from "@the-library/core";
+import { attachGmpGeography } from "./gmpGeography";
 
 const NUM_MAP: Record<string, string> = {};
 const CHAR_MAP: Record<string, string> = {};
@@ -128,6 +130,8 @@ export async function initGmpEngine(hexJson: string): Promise<void> {
   randState = 0;
   g.gmp_randinit_default(randState as never);
   g.gmp_randseed_ui(randState as never, (Date.now() >>> 0) || 1);
+
+  attachGmpGeography(g);
 }
 
 function seqFromIdentifier(identifier: string): {
@@ -330,25 +334,17 @@ export function gmpLookupContent(content: string, page: number): string {
   return identifier;
 }
 
+/**
+ * Log-uniform-length random identifier (same distribution as core
+ * {@link randomIdentifier} / Geography “Jump to random”).
+ * Value-uniform sampling over the book space almost always yields ~book-length
+ * room ids; log-uniform length spreads short → book-scale across magnitudes.
+ */
 export function gmpRandomIdentifier(): string {
-  const g = gmp();
-  if (randState == null) throw new Error("RNG not initialised");
-
-  const uniqueBooks = g.mpz_t();
-  g.mpz_init(uniqueBooks);
-  g.mpz_set_ui(uniqueBooks, ALPHA.length);
-  g.mpz_pow_ui(uniqueBooks, uniqueBooks, BOOK_LENGTH);
-
-  const seq = g.mpz_t();
-  g.mpz_init(seq);
-  g.mpz_urandomm(seq, randState as never, uniqueBooks);
-  g.mpz_add_ui(seq, seq, 1);
-
-  const page = 1 + Math.floor(Math.random() * PAGES);
-  const identifier = identifierFromSeq(seq, page);
-
-  g.mpz_clears(seq, uniqueBooks);
-  return identifier;
+  // Engine must be ready (N/C/I loaded) before /random is offered, but room
+  // sampling no longer depends on those constants.
+  gmp();
+  return randomIdentifier();
 }
 
 export function gmpMoveIdentifier(

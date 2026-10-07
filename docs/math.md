@@ -8,7 +8,7 @@ The Library maps each book coordinate to unique text using a modular bijection a
 - Hexagonal room: 6 sides; **4 shelved walls** × 5 shelves × 32 books = 640 books per room (two sides are open — doorways / shafts)
 - Book: 410 pages × 40 lines × 80 characters = 1,312,000 characters
 - Identifier: `ROOM.WALL.SHELF.BOOK.PAGE` (room in base-32 `[0-9a-v]`)
-- Random: uniform sequential book index in `[1, N]`, plus a random page (full library depth)
+- Random: room length log-uniform in `[1, BOOK_LENGTH]` with crypto base-32 digits, plus uniform wall/shelf/book/page (value-uniform over `[1, N]` almost always yields ~book-length ids)
 - Browser engine: `gmp-wasm` in the web worker (JavaScriptCore / Safari caps native BigInt at ~1M bits; `N` is ~6.5M bits)
 
 ## Sequential index
@@ -35,3 +35,7 @@ Search does not scan. It builds a full book string containing the query (padding
 ## Travel
 
 WASD / trackball transforms stay on the lattice (wall, shelf, book, room). Page arrows walk sequential pages across book boundaries.
+
+## Physical geography
+
+Each Babel room also has a derived physical location on an infinite hex + level lattice (Entrance at Babel room 1 ↔ `(q,r,level) = (0,0,0)`). See [PHYSICAL_GEOGRAPHY.md](./PHYSICAL_GEOGRAPHY.md).
