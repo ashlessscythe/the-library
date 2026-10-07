@@ -15,7 +15,15 @@ export type GeographySnapshot = {
   babelRoomShort: string;
   bearing: string | null;
   physicalDistanceLabel: string | null;
+  /** False when shell distance is log-estimated (book-scale rooms). */
+  exact: boolean;
 };
+
+/**
+ * Above this digit length, full shell unranking is too slow for interactive UI.
+ * We still show a log-estimated shell distance and keep the room for open-volume.
+ */
+export const EXACT_GEOGRAPHY_DIGIT_CAP = 4_000;
 
 type Gmp = GMPFunctions;
 
@@ -570,8 +578,46 @@ function snapshotFromSession(g: Gmp): GeographySnapshot {
       babelRoomShort: shortenRoom(babelRoom),
       bearing,
       physicalDistanceLabel,
+      exact: true,
     };
   });
+}
+
+/** Instant shell/geo estimate from base-32 length — no megabit mpz math. */
+function approximateSnapshotFromRoom(room: string): GeographySnapshot {
+  const head = room.slice(0, 12);
+  const headVal = parseInt(head, 32);
+  if (!Number.isFinite(headVal) || headVal <= 0) {
+    throw new Error("Invalid Babel room");
+  }
+  const log10Room =
+    (room.length - head.length) * Math.log10(32) + Math.log10(headVal);
+  // geo ≈ room − 1 ≈ room for huge values; R ≈ cbrt(geo/6)
+  const log10R = (log10Room - Math.log10(6)) / 3;
+  const shellCompact = scientificFromLog10(Math.max(0, log10R));
+  const geoCompact = scientificFromLog10(log10Room);
+  return {
+    shellCompact,
+    levelCompact: "≈ ±shell",
+    geoCompact,
+    qCompact: "exact unrank deferred",
+    rCompact: "exact unrank deferred",
+    babelRoomShort: shortenRoom(room),
+    bearing: null,
+    physicalDistanceLabel: null,
+    exact: false,
+  };
+}
+
+function scientificFromLog10(log10: number): string {
+  if (!Number.isFinite(log10) || log10 < 0) return "0";
+  if (log10 < 24) {
+    const n = Math.round(10 ** log10);
+    return withCommas(String(n));
+  }
+  const e = Math.floor(log10);
+  const mant = 10 ** (log10 - e);
+  return `${mant.toFixed(2)} × 10${toSuperscript(e)}`;
 }
 
 function formatMeters(meters: number): string {
@@ -585,7 +631,6 @@ function formatMeters(meters: number): string {
 
 /** Seed session from a Babel room base-32 string (any size). */
 export function gmpGeographySeedFromRoom(roomRaw: string): GeographySnapshot {
-  const g = gmp();
   let room = roomRaw.toLowerCase();
   if (room.length > 1 && room.startsWith("0")) {
     room = room.replace(/^0+/, "") || "0";
@@ -593,7 +638,24 @@ export function gmpGeographySeedFromRoom(roomRaw: string): GeographySnapshot {
   if (!/^[0-9a-v]+$/.test(room)) {
     throw new Error("Room must be a base-32 string [0-9a-v]");
   }
+  if (room === "0") {
+    throw new Error("Babel room must be ≥ 1");
+  }
 
+  sessionBabelRoom = room;
+
+  // Book-scale rooms: exact unrank is too slow for interactive UI.
+  if (room.length > EXACT_GEOGRAPHY_DIGIT_CAP) {
+    // Clear physical session — moves unavailable until reset / smaller room.
+    const g = gmp();
+    const { q, r, level } = ensureSession();
+    g.mpz_set_ui(q, 0);
+    g.mpz_set_ui(r, 0);
+    g.mpz_set_ui(level, 0);
+    return approximateSnapshotFromRoom(room);
+  }
+
+  const g = gmp();
   const { q, r, level } = ensureSession();
   withTemp(g, 2, ([babel, geo]) => {
     if (g.mpz_set_string(babel, room, 32) !== 0) {
@@ -605,7 +667,6 @@ export function gmpGeographySeedFromRoom(roomRaw: string): GeographySnapshot {
     g.mpz_sub_ui(geo, babel, 1);
     roomIndexToPhysical(g, geo, q, r, level);
   });
-  sessionBabelRoom = room;
   return snapshotFromSession(g);
 }
 
@@ -633,6 +694,11 @@ const MOVE_DELTA: Record<
 
 /** Move session; returns new snapshot including updated babel room. */
 export function gmpGeographyMove(direction: PhysicalDirection): GeographySnapshot {
+  if (sessionBabelRoom && sessionBabelRoom.length > EXACT_GEOGRAPHY_DIGIT_CAP) {
+    throw new Error(
+      "Physical moves need exact coordinates. Book-scale rooms show an estimated distance only — open the volume or reset to the Entrance to walk."
+    );
+  }
   const g = gmp();
   const { q, r, level } = ensureSession();
   if (direction === "UP") {

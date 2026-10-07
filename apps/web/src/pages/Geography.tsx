@@ -342,7 +342,9 @@ export function Geography() {
           </p>
           {largeMode ? (
             <p className="font-mono text-[10px] text-[var(--dim)]">
-              Large room — place computed by the library engine (compact display).
+              {largeSnap.exact
+                ? "Large room — exact place via the library engine (compact display)."
+                : "Book-scale room — shell distance estimated (exact hex unrank is deferred). Open the volume or reset to walk."}
             </p>
           ) : null}
         </div>
@@ -359,7 +361,7 @@ export function Geography() {
                 variant="outline"
                 size="sm"
                 className="font-mono"
-                disabled={busy || seeding}
+                disabled={busy || seeding || (largeMode && !largeSnap.exact)}
                 onClick={() => void step(d)}
               >
                 {d}
@@ -372,7 +374,7 @@ export function Geography() {
               variant="outline"
               size="sm"
               className="min-w-[5rem] font-mono"
-              disabled={busy || seeding}
+              disabled={busy || seeding || (largeMode && !largeSnap.exact)}
               onClick={() => void step("UP")}
             >
               UP
@@ -382,7 +384,7 @@ export function Geography() {
               variant="outline"
               size="sm"
               className="min-w-[5rem] font-mono"
-              disabled={busy || seeding}
+              disabled={busy || seeding || (largeMode && !largeSnap.exact)}
               onClick={() => void step("DOWN")}
             >
               DOWN
@@ -411,7 +413,9 @@ export function Geography() {
         {seeding ? (
           <p className="font-mono text-xs text-[var(--dim)]">
             Locating this room…
-            {!engineReady ? " (starting engine)" : ""}
+            {!engineReady
+              ? " (starting engine)"
+              : " (book-scale ids can take a moment)"}
           </p>
         ) : null}
         {engineError ? (
