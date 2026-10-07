@@ -1,11 +1,13 @@
 import { useCallback, useRef } from "react";
 import type { MoveDirection } from "@the-library/core";
 import { KeyMapDiagram } from "@/components/KeyMapDiagram";
+import type { GeographyLocationState } from "@/lib/geographyNav";
 import { cn } from "@/lib/utils";
 
 type Props = {
   onMove: (direction: MoveDirection) => void;
   className?: string;
+  geographyState?: GeographyLocationState;
 };
 
 const THRESHOLD = 36;
@@ -14,7 +16,7 @@ const THRESHOLD = 36;
  * Virtual trackball: drag emits discrete lattice steps with hysteresis.
  * Horizontal → wall (Q/E) · Vertical → shelf (W/S)
  */
-export function Trackball({ onMove, className }: Props) {
+export function Trackball({ onMove, className, geographyState }: Props) {
   const origin = useRef<{ x: number; y: number } | null>(null);
   const fired = useRef(false);
 
@@ -85,7 +87,7 @@ export function Trackball({ onMove, className }: Props) {
         </button>
       </div>
 
-      <KeyMapDiagram onMove={onMove} />
+      <KeyMapDiagram onMove={onMove} geographyState={geographyState} />
     </div>
   );
 }

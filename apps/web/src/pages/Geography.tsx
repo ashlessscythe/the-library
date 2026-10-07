@@ -1,5 +1,11 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BASE32_ALPHA,
   babelRoomToPhysicalLocation,
@@ -25,8 +31,9 @@ import {
 } from "@the-library/core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { GeographyLocationState } from "@/lib/geographyNav";
 import { bookPath } from "@/lib/routes";
-import { ensureRoomKey } from "@/lib/rooms";
+import { ensureRoomKey, resolveRoom } from "@/lib/rooms";
 
 const INPUT_DIGIT_CAP = 256;
 const ROOM_CHAR_RE = new RegExp(`[^${BASE32_ALPHA}]`, "gi");
@@ -49,17 +56,12 @@ function formatSignedLevel(level: bigint): string {
 function Disclosure({
   title,
   children,
-  defaultOpen = false,
 }: {
   title: string;
   children: ReactNode;
-  defaultOpen?: boolean;
 }) {
   return (
-    <details
-      className="group border border-[var(--line)] bg-[var(--paper)] open:bg-[var(--panel)]"
-      defaultOpen={defaultOpen}
-    >
+    <details className="group border border-[var(--line)] bg-[var(--paper)] open:bg-[var(--panel)]">
       <summary className="cursor-pointer list-none px-4 py-3 font-mono text-[10px] uppercase tracking-[0.25em] text-[var(--muted)] marker:content-none hover:text-[var(--mark)] [&::-webkit-details-marker]:hidden">
         <span className="flex items-center justify-between gap-3">
           <span>{title}</span>
@@ -77,10 +79,14 @@ function Disclosure({
 
 export function Geography() {
   const navigate = useNavigate();
+  const route = useLocation();
+  const seed = (route.state as GeographyLocationState | null) ?? null;
+
   const [location, setLocation] = useState<PhysicalLocation>(() =>
     roomIndexToPhysicalLocation(0n)
   );
   const [error, setError] = useState<string | null>(null);
+  const [seeding, setSeeding] = useState(Boolean(seed?.roomKey));
   const [opening, setOpening] = useState(false);
   const [jumpMode, setJumpMode] = useState<"babel" | "geo">("babel");
   const [babelRoom, setBabelRoom] = useState("1");
@@ -102,6 +108,47 @@ export function Geography() {
     setBabelRoom(roomToBase32(nextBabel));
     setError(null);
   }
+
+  // Seed from Explore / Reader when they pass a roomKey in location.state.
+  useEffect(() => {
+    const key = seed?.roomKey;
+    if (!key) {
+      setSeeding(false);
+      return;
+    }
+    let cancelled = false;
+    setSeeding(true);
+    setError(null);
+    resolveRoom(key)
+      .then((full) => {
+        if (cancelled) return;
+        const norm = normalizeRoomString(full);
+        if (norm.length > INPUT_DIGIT_CAP) {
+          setError(
+            `This room’s id is too large to locate in geography (${norm.length} digits; max ${INPUT_DIGIT_CAP}).`
+          );
+          setSeeding(false);
+          return;
+        }
+        const room = parseBase32(norm);
+        if (room < 1n) {
+          throw new Error("Babel room must be ≥ 1");
+        }
+        applyLocation(babelRoomToPhysicalLocation(room));
+        setSeeding(false);
+      })
+      .catch((e: Error) => {
+        if (!cancelled) {
+          setError(e.message || "Could not load room for geography");
+          setSeeding(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Only re-seed when the incoming roomKey changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyLocation is stable enough via setState
+  }, [seed?.roomKey]);
 
   function step(dir: PhysicalDirection) {
     applyLocation(move(location, dir));
@@ -254,6 +301,11 @@ export function Geography() {
             {opening ? "Opening…" : "Open volume in this room"}
           </Button>
         </div>
+        {seeding ? (
+          <p className="font-mono text-xs text-[var(--dim)]">
+            Locating this room…
+          </p>
+        ) : null}
         {error ? (
           <p className="font-mono text-xs text-red-500">{error}</p>
         ) : null}
