@@ -15,12 +15,14 @@ type WheelPickerProps = {
   max: number;
   /** Prefix shown before the number, e.g. "W" */
   prefix?: string;
-  /** Row height in px — keep in sync with HUD text size for compact mode. */
+  /** Row height in px — keep in sync with HUD text size. */
   itemHeight?: number;
-  /** Odd number of visible rows (3 keeps the float tiny). */
-  visibleRows?: number;
+  /** Rows shown above the selected value. */
+  rowsAbove?: number;
+  /** Rows shown below the selected value. */
+  rowsBelow?: number;
   onChange: (value: number) => void;
-  /** Fired when the user explicitly taps a row (good moment to commit). */
+  /** Fired when the user taps a row — that value becomes the selection. */
   onPick?: (value: number) => void;
   className?: string;
 };
@@ -35,7 +37,8 @@ export function WheelPicker({
   max,
   prefix = "",
   itemHeight = 20,
-  visibleRows = 3,
+  rowsAbove = 1,
+  rowsBelow = 3,
   onChange,
   onPick,
   className,
@@ -46,7 +49,9 @@ export function WheelPicker({
   const scrollEndTimer = useRef<number | null>(null);
   const [active, setActive] = useState(() => clamp(value, min, max));
   const values = Array.from({ length: max - min + 1 }, (_, i) => min + i);
-  const pad = Math.floor(visibleRows / 2) * itemHeight;
+  const visibleRows = rowsAbove + 1 + rowsBelow;
+  const padTop = rowsAbove * itemHeight;
+  const padBottom = rowsBelow * itemHeight;
 
   const scrollToValue = useCallback(
     (v: number, behavior: ScrollBehavior = "smooth") => {
@@ -126,18 +131,29 @@ export function WheelPicker({
     return () => el.removeEventListener("keydown", onKey);
   }, [active, min, max, onChange, onPick, scrollToValue]);
 
+  const selectValue = (n: number) => {
+    const next = clamp(n, min, max);
+    setActive(next);
+    onChange(next);
+    onPick?.(next);
+  };
+
+  const pressY = useRef<number | null>(null);
+
   return (
     <div
       className={cn("wheel-picker relative select-none", className)}
-      style={{ height: visibleRows * itemHeight } as CSSProperties}
+      style={
+        {
+          height: visibleRows * itemHeight,
+          "--wheel-band-top": `${padTop}px`,
+          "--wheel-item-h": `${itemHeight}px`,
+        } as CSSProperties
+      }
     >
       <div className="wheel-picker-fade wheel-picker-fade-top" aria-hidden />
       <div className="wheel-picker-fade wheel-picker-fade-bottom" aria-hidden />
-      <div
-        className="wheel-picker-band"
-        style={{ height: itemHeight } as CSSProperties}
-        aria-hidden
-      />
+      <div className="wheel-picker-band" aria-hidden />
       <div
         ref={scrollerRef}
         className="wheel-picker-scroller h-full overflow-y-auto overscroll-contain outline-none touch-pan-y"
@@ -147,12 +163,13 @@ export function WheelPicker({
         aria-activedescendant={`${uid}-opt-${active}`}
         onScroll={onScroll}
       >
-        <div style={{ height: pad }} aria-hidden />
+        <div style={{ height: padTop }} aria-hidden />
         {values.map((n) => {
           const dist = Math.abs(n - active);
           const scale =
-            dist === 0 ? 1.12 : dist === 1 ? 0.9 : 0.78;
-          const opacity = dist === 0 ? 1 : dist === 1 ? 0.45 : 0.18;
+            dist === 0 ? 1.12 : dist === 1 ? 0.92 : dist === 2 ? 0.84 : 0.76;
+          const opacity =
+            dist === 0 ? 1 : dist === 1 ? 0.5 : dist === 2 ? 0.28 : 0.14;
           return (
             <button
               key={n}
@@ -168,11 +185,27 @@ export function WheelPicker({
                   opacity,
                 } as CSSProperties
               }
-              onClick={() => {
-                setActive(n);
-                scrollToValue(n);
-                onChange(n);
-                onPick?.(n);
+              onPointerDown={(e) => {
+                pressY.current = e.clientY;
+              }}
+              onPointerUp={(e) => {
+                // Tap selects; a drag/scroll does not.
+                if (
+                  pressY.current != null &&
+                  Math.abs(e.clientY - pressY.current) < 8
+                ) {
+                  e.preventDefault();
+                  selectValue(n);
+                }
+                pressY.current = null;
+              }}
+              onPointerCancel={() => {
+                pressY.current = null;
+              }}
+              onClick={(e) => {
+                // Keyboard / accessibility activation.
+                e.preventDefault();
+                selectValue(n);
               }}
             >
               <span className={cn(n === active && "text-[var(--mark)]")}>
@@ -182,7 +215,7 @@ export function WheelPicker({
             </button>
           );
         })}
-        <div style={{ height: pad }} aria-hidden />
+        <div style={{ height: padBottom }} aria-hidden />
       </div>
     </div>
   );

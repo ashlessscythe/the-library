@@ -173,7 +173,7 @@ a:hover {
 }
 
 .wheel-picker-scroller {
-  scroll-snap-type: y mandatory;
+  /* Snap via JS to the asymmetric selection row (1 above / 3 below). */
   scrollbar-width: none;
   -ms-overflow-style: none;
   overscroll-behavior: contain;
@@ -189,7 +189,6 @@ a:hover {
   width: 100%;
   align-items: center;
   justify-content: center;
-  scroll-snap-align: center;
   border: 0;
   background: transparent;
   padding: 0;
@@ -200,6 +199,7 @@ a:hover {
   text-transform: uppercase;
   color: var(--muted);
   cursor: pointer;
+  touch-action: manipulation;
   transition:
     transform 150ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 150ms ease,
@@ -214,9 +214,8 @@ a:hover {
   pointer-events: none;
   position: absolute;
   inset-inline: 3px;
-  top: 50%;
-  height: 18px;
-  transform: translateY(-50%);
+  top: var(--wheel-band-top, 18px);
+  height: var(--wheel-item-h, 18px);
   border-block: 1px solid color-mix(in srgb, var(--mark) 40%, var(--line));
   background: color-mix(in srgb, var(--mark) 10%, transparent);
   z-index: 1;
@@ -226,17 +225,18 @@ a:hover {
   pointer-events: none;
   position: absolute;
   inset-inline: 0;
-  height: 34%;
   z-index: 2;
 }
 
 .wheel-picker-fade-top {
   top: 0;
+  height: 22%;
   background: linear-gradient(to bottom, var(--panel), transparent);
 }
 
 .wheel-picker-fade-bottom {
   bottom: 0;
+  height: 48%;
   background: linear-gradient(to top, var(--panel), transparent);
 }
 

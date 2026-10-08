@@ -28,7 +28,10 @@ const PREFIX: Record<CoordKind, string> = {
 
 /** Match Reader HUD mono xs row height. */
 const ITEM_H = 18;
-const VISIBLE = 3;
+/** One value above the selection, three below. */
+const ROWS_ABOVE = 1;
+const ROWS_BELOW = 3;
+const VISIBLE = ROWS_ABOVE + 1 + ROWS_BELOW;
 const PAD_Y = 4;
 const EDGE = 8;
 
@@ -45,17 +48,22 @@ type FloatPos = {
   left: number;
   width: number;
   height: number;
-  /** Pixel offset of the trigger center inside the float (transform-origin). */
   originX: number;
   originY: number;
 };
 
-function measureFloat(trigger: DOMRect, floatW: number, floatH: number): FloatPos {
+function measureFloat(
+  trigger: DOMRect,
+  floatW: number,
+  floatH: number,
+  selectionOffsetY: number
+): FloatPos {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
-  // Center the float on the clicked label so the active row sits on top of it.
-  let top = trigger.top + trigger.height / 2 - floatH / 2;
+  // Align the selected row with the clicked label; popover hangs mostly down.
+  let top =
+    trigger.top + trigger.height / 2 - ITEM_H / 2 - selectionOffsetY;
   let left = trigger.left + trigger.width / 2 - floatW / 2;
 
   top = Math.min(Math.max(EDGE, top), Math.max(EDGE, vh - floatH - EDGE));
@@ -87,18 +95,25 @@ export function CoordPicker({
   const label = LABELS[kind];
   const display = value == null ? "—" : String(value);
 
-  // Wide enough for e.g. "P410" with HUD letter-spacing.
   const floatW = Math.max(
     48,
     Math.ceil(`${prefix}${max}`.length * 11 + 20)
   );
   const floatH = VISIBLE * ITEM_H + PAD_Y * 2;
+  const selectionOffsetY = PAD_Y + ROWS_ABOVE * ITEM_H;
 
   const reposition = useCallback(() => {
     const el = triggerRef.current;
     if (!el) return;
-    setPos(measureFloat(el.getBoundingClientRect(), floatW, floatH));
-  }, [floatW, floatH]);
+    setPos(
+      measureFloat(
+        el.getBoundingClientRect(),
+        floatW,
+        floatH,
+        selectionOffsetY
+      )
+    );
+  }, [floatW, floatH, selectionOffsetY]);
 
   useEffect(() => {
     if (open && value != null) setDraft(value);
@@ -166,7 +181,6 @@ export function CoordPicker({
         )}
         onClick={() => setOpen((v) => !v)}
       >
-        {/* Keep layout space while open; float draws on top of this label. */}
         <span className={cn(open && "opacity-0")}>
           {prefix}
           {display}
@@ -181,10 +195,7 @@ export function CoordPicker({
               type="button"
               aria-label="Dismiss picker"
               className="coord-dismiss fixed inset-0 z-40 cursor-default bg-transparent"
-              onClick={() => {
-                if (value != null && draft !== value) confirm(draft);
-                else setOpen(false);
-              }}
+              onClick={() => setOpen(false)}
             />
             <div
               ref={floatRef}
@@ -200,10 +211,11 @@ export function CoordPicker({
                   transformOrigin: `${pos.originX}px ${pos.originY}px`,
                 } as CSSProperties
               }
+              onPointerDown={(e) => e.stopPropagation()}
             >
               <p className="sr-only">
-                Scroll or tap to choose a {label.toLowerCase()} from 1 to {max}.
-                Press Enter to open the selection.
+                Scroll or tap a value to select a {label.toLowerCase()} from 1
+                to {max}.
               </p>
               <WheelPicker
                 value={draft}
@@ -211,7 +223,8 @@ export function CoordPicker({
                 max={max}
                 prefix={prefix}
                 itemHeight={ITEM_H}
-                visibleRows={VISIBLE}
+                rowsAbove={ROWS_ABOVE}
+                rowsBelow={ROWS_BELOW}
                 onChange={setDraft}
                 onPick={confirm}
                 className="coord-float-wheel"
