@@ -32,6 +32,7 @@ import {
   type PhysicalLocation,
 } from "@the-library/core";
 import { GeographyAbout } from "@/components/GeographyAbout";
+import { GeographyGlobe } from "@/components/GeographyGlobe";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLibraryEngine } from "@/hooks/useLibraryEngine";
@@ -458,39 +459,49 @@ export function Geography() {
       </header>
 
       <section className="space-y-6 border border-[var(--line)] bg-[var(--paper)] p-6 sm:p-8">
-        <div className="space-y-2">
-          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-[var(--mark)]">
-            You are here
-          </p>
-          <p className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl">
-            Level {levelDisplay}
-          </p>
-          <p className="font-serif text-lg text-[var(--muted)]">
-            {shellDisplay} {shellIsOne ? "room" : "rooms"} from the Entrance
-            {bearing ? (
-              <span className="text-[var(--dim)]"> · bearing {bearing}</span>
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1 space-y-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-[var(--mark)]">
+              You are here
+            </p>
+            <p className="font-[family-name:var(--font-display)] text-3xl sm:text-4xl">
+              Level {levelDisplay}
+            </p>
+            <p className="font-serif text-lg text-[var(--muted)]">
+              {shellDisplay} {shellIsOne ? "room" : "rooms"} from the Entrance
+              {bearing ? (
+                <span className="text-[var(--dim)]"> · bearing {bearing}</span>
+              ) : null}
+            </p>
+            {distLabel ? (
+              <p className="font-mono text-xs uppercase tracking-wider text-[var(--dim)]">
+                ≈ {distLabel}
+              </p>
             ) : null}
-          </p>
-          {distLabel ? (
-            <p className="font-mono text-xs uppercase tracking-wider text-[var(--dim)]">
-              ≈ {distLabel}
+            <p className="font-mono text-xs text-[var(--dim)]">
+              Babel room{" "}
+              <span className="text-[var(--muted)]">
+                {largeMode ? largeSnap.babelRoomShort : shortenRoom(babelStr)}
+              </span>
+              <span className="mx-2 text-[var(--line)]">·</span>
+              Geo {geoDisplay}
             </p>
-          ) : null}
-          <p className="font-mono text-xs text-[var(--dim)]">
-            Babel room{" "}
-            <span className="text-[var(--muted)]">
-              {largeMode ? largeSnap.babelRoomShort : shortenRoom(babelStr)}
-            </span>
-            <span className="mx-2 text-[var(--line)]">·</span>
-            Geo {geoDisplay}
-          </p>
-          {largeMode ? (
-            <p className="font-mono text-[10px] text-[var(--dim)]">
-              {largeSnap.exact
-                ? `Large room (${formatRoomCharCount(largeSnap.babelRoomLength)}) — exact place via the library engine (compact display).`
-                : `Book-scale room (${formatRoomCharCount(largeSnap.babelRoomLength)}) — shell distance estimated (exact hex unrank is deferred). Open the volume or reset to walk.`}
-            </p>
-          ) : null}
+            {largeMode ? (
+              <p className="font-mono text-[10px] text-[var(--dim)]">
+                {largeSnap.exact
+                  ? `Large room (${formatRoomCharCount(largeSnap.babelRoomLength)}) — exact place via the library engine (compact display).`
+                  : `Book-scale room (${formatRoomCharCount(largeSnap.babelRoomLength)}) — shell distance estimated (exact hex unrank is deferred). Open the volume or reset to walk.`}
+              </p>
+            ) : null}
+          </div>
+          <GeographyGlobe
+            className="mx-auto shrink-0 sm:mx-0"
+            location={largeMode ? null : location}
+            bearing={bearing}
+            levelCompact={levelDisplay}
+            shellCompact={shellDisplay}
+            exact={!largeMode || largeSnap.exact}
+          />
         </div>
 
         <div className="space-y-3">
