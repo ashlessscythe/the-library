@@ -1,7 +1,13 @@
-import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
 import { WheelPicker } from "@/components/WheelPicker";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export type CoordKind = "wall" | "shelf" | "book" | "page";
@@ -20,6 +26,12 @@ const PREFIX: Record<CoordKind, string> = {
   page: "P",
 };
 
+/** Match Reader HUD mono xs row height. */
+const ITEM_H = 18;
+const VISIBLE = 3;
+const GAP = 6;
+const EDGE = 8;
+
 type CoordPickerProps = {
   kind: CoordKind;
   value: number | null;
@@ -27,6 +39,43 @@ type CoordPickerProps = {
   disabled?: boolean;
   onCommit: (value: number) => void;
 };
+
+type FloatPos = {
+  top: number;
+  left: number;
+  transformOrigin: string;
+  placement: "below" | "above";
+};
+
+function measureFloat(
+  trigger: DOMRect,
+  floatW: number,
+  floatH: number
+): FloatPos {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+
+  let top = trigger.bottom + GAP;
+  let placement: "below" | "above" = "below";
+  if (top + floatH > vh - EDGE && trigger.top - GAP - floatH >= EDGE) {
+    top = trigger.top - GAP - floatH;
+    placement = "above";
+  }
+  // Still clamp if the viewport is very short.
+  top = Math.min(Math.max(EDGE, top), Math.max(EDGE, vh - floatH - EDGE));
+
+  let left = trigger.left + trigger.width / 2 - floatW / 2;
+  left = Math.min(Math.max(EDGE, left), Math.max(EDGE, vw - floatW - EDGE));
+
+  const originX = trigger.left + trigger.width / 2 - left;
+  const originY = placement === "below" ? 0 : floatH;
+  return {
+    top,
+    left,
+    transformOrigin: `${originX}px ${originY}px`,
+    placement,
+  };
+}
 
 export function CoordPicker({
   kind,
@@ -37,13 +86,67 @@ export function CoordPicker({
 }: CoordPickerProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(1);
+  const [pos, setPos] = useState<FloatPos | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const floatRef = useRef<HTMLDivElement>(null);
   const prefix = PREFIX[kind];
   const label = LABELS[kind];
   const display = value == null ? "—" : String(value);
 
+  // Width tracks longest label for this kind (e.g. P410).
+  const floatW = Math.max(
+    44,
+    Math.ceil(`${prefix}${max}`.length * 9.5 + 16)
+  );
+  const floatH = VISIBLE * ITEM_H + 8; // padding
+
+  const reposition = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    setPos(measureFloat(el.getBoundingClientRect(), floatW, floatH));
+  }, [floatW, floatH]);
+
   useEffect(() => {
     if (open && value != null) setDraft(value);
   }, [open, value]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    reposition();
+    const onWin = () => reposition();
+    window.addEventListener("resize", onWin);
+    window.addEventListener("scroll", onWin, true);
+    return () => {
+      window.removeEventListener("resize", onWin);
+      window.removeEventListener("scroll", onWin, true);
+    };
+  }, [open, reposition]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    // Focus wheel after paint so keyboard/scroll works immediately.
+    const id = window.requestAnimationFrame(() => {
+      floatRef.current
+        ?.querySelector<HTMLElement>(".wheel-picker-scroller")
+        ?.focus();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [open, pos]);
 
   const confirm = (next: number) => {
     setOpen(false);
@@ -51,81 +154,82 @@ export function CoordPicker({
   };
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger asChild>
-        <button
-          type="button"
-          disabled={disabled || value == null}
-          className={cn(
-            "coord-trigger inline-flex items-baseline rounded-sm px-0.5 font-mono text-xs uppercase tracking-[0.2em]",
-            "text-[var(--muted)] transition-[color,transform,background-color] duration-200",
-            "hover:text-[var(--mark)] hover:bg-[color-mix(in_srgb,var(--mark)_12%,transparent)]",
-            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--mark)]",
-            "disabled:pointer-events-none disabled:opacity-40",
-            "active:scale-95"
-          )}
-          aria-label={`Select ${label}`}
-        >
-          {prefix}
-          {display}
-        </button>
-      </Dialog.Trigger>
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled || value == null}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Select ${label}`}
+        className={cn(
+          "coord-trigger inline-flex items-baseline rounded-sm px-0.5 font-mono text-xs uppercase tracking-[0.2em]",
+          "text-[var(--muted)] transition-[color,transform,background-color] duration-200",
+          "hover:text-[var(--mark)] hover:bg-[color-mix(in_srgb,var(--mark)_12%,transparent)]",
+          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--mark)]",
+          "disabled:pointer-events-none disabled:opacity-40",
+          "active:scale-95",
+          open && "text-[var(--mark)]"
+        )}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {prefix}
+        {display}
+      </button>
 
-      <Dialog.Portal>
-        <Dialog.Overlay className="coord-overlay fixed inset-0 z-50 bg-black/55" />
-        <Dialog.Content
-          className="coord-sheet fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-sm outline-none sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:px-4"
-          onOpenAutoFocus={(e) => {
-            // Focus the wheel scroller, not the close chrome.
-            e.preventDefault();
-            const wheel = document.querySelector<HTMLElement>(
-              ".coord-sheet .wheel-picker-scroller"
-            );
-            wheel?.focus();
-          }}
-        >
-          <div className="border border-[var(--line)] bg-[var(--panel)] shadow-[0_-12px_40px_rgba(0,0,0,0.45)] sm:shadow-[0_18px_50px_rgba(0,0,0,0.5)]">
-            <div className="flex items-center justify-between border-b border-[var(--line)] px-4 py-3">
-              <Dialog.Title className="font-mono text-xs uppercase tracking-[0.22em] text-[var(--muted)]">
-                {label}
-              </Dialog.Title>
-              <Dialog.Description className="sr-only">
+      {open &&
+        pos &&
+        createPortal(
+          <>
+            <button
+              type="button"
+              aria-label="Dismiss picker"
+              className="coord-dismiss fixed inset-0 z-40 cursor-default bg-transparent"
+              onClick={() => {
+                // Tap-away keeps the scrolled value (iOS-like), Escape cancels.
+                if (value != null && draft !== value) confirm(draft);
+                else setOpen(false);
+              }}
+            />
+            <div
+              ref={floatRef}
+              role="dialog"
+              aria-label={`${label} picker`}
+              className={cn(
+                "coord-float fixed z-50 border border-[var(--line)] bg-[var(--panel)]",
+                pos.placement === "below"
+                  ? "coord-float--below"
+                  : "coord-float--above"
+              )}
+              style={
+                {
+                  top: pos.top,
+                  left: pos.left,
+                  width: floatW,
+                  transformOrigin: pos.transformOrigin,
+                  ["--coord-float-w" as string]: `${floatW}px`,
+                } as CSSProperties
+              }
+            >
+              <p className="sr-only">
                 Scroll or tap to choose a {label.toLowerCase()} from 1 to {max}.
-              </Dialog.Description>
-              <Dialog.Close asChild>
-                <button
-                  type="button"
-                  className="font-mono text-xs uppercase tracking-[0.16em] text-[var(--dim)] transition-colors hover:text-[var(--fg)]"
-                >
-                  Cancel
-                </button>
-              </Dialog.Close>
-            </div>
-
-            <div className="px-6 py-5">
+                Press Enter to open the selection.
+              </p>
               <WheelPicker
                 value={draft}
                 min={1}
                 max={max}
                 prefix={prefix}
+                itemHeight={ITEM_H}
+                visibleRows={VISIBLE}
                 onChange={setDraft}
+                onPick={confirm}
+                className="coord-float-wheel"
               />
             </div>
-
-            <div className="flex justify-end gap-2 border-t border-[var(--line)] px-4 py-3">
-              <Button
-                type="button"
-                size="sm"
-                variant="mark"
-                onClick={() => confirm(draft)}
-              >
-                Open {prefix}
-                {draft}
-              </Button>
-            </div>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          </>,
+          document.body
+        )}
+    </>
   );
 }
