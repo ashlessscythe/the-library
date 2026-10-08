@@ -140,3 +140,106 @@ a:hover {
 .hud-animate {
   animation: hud-pulse 280ms ease-out;
 }
+
+/* Compact iOS-style coordinate float — expands from the clicked HUD label */
+.coord-trigger--open {
+  /* Invisible stand-in so neighbors don't shift while the float covers it. */
+  pointer-events: none;
+}
+
+.coord-float {
+  padding: 4px 0;
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  animation: coord-float-in 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes coord-float-in {
+  from {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.wheel-picker {
+  perspective: 420px;
+}
+
+.wheel-picker-scroller {
+  /* Snap via JS to the asymmetric selection row (1 above / 3 below). */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.wheel-picker-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.wheel-picker-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem; /* match HUD text-xs */
+  line-height: 1;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    transform 150ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 150ms ease,
+    color 150ms ease;
+}
+
+.wheel-picker-item:hover span {
+  color: var(--fg);
+}
+
+.wheel-picker-band {
+  pointer-events: none;
+  position: absolute;
+  inset-inline: 3px;
+  top: var(--wheel-band-top, 18px);
+  height: var(--wheel-item-h, 18px);
+  border-block: 1px solid color-mix(in srgb, var(--mark) 40%, var(--line));
+  background: color-mix(in srgb, var(--mark) 10%, transparent);
+  z-index: 1;
+}
+
+.wheel-picker-fade {
+  pointer-events: none;
+  position: absolute;
+  inset-inline: 0;
+  z-index: 2;
+}
+
+.wheel-picker-fade-top {
+  top: 0;
+  height: 22%;
+  background: linear-gradient(to bottom, var(--panel), transparent);
+}
+
+.wheel-picker-fade-bottom {
+  bottom: 0;
+  height: 48%;
+  background: linear-gradient(to top, var(--panel), transparent);
+}
+
+.coord-trigger:focus-visible {
+  color: var(--mark);
+}

@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import type { MoveDirection, PageContent } from "@the-library/core";
-import { PAGES, shortenRoom } from "@the-library/core";
+import {
+  BOOKS,
+  PAGES,
+  SHELVES,
+  WALLS,
+  shortenRoom,
+} from "@the-library/core";
+import { CoordPicker, type CoordKind } from "@/components/CoordPicker";
 import { Trackball } from "@/components/Trackball";
 import { Button } from "@/components/ui/button";
 import { useLibraryEngine } from "@/hooks/useLibraryEngine";
@@ -9,6 +16,7 @@ import { useTravelKeys } from "@/hooks/useTravelKeys";
 import { addBookmark } from "@/lib/bookmarks";
 import { formatPageNodes } from "@/lib/highlight";
 import {
+  bookPath,
   bookPathFromIdentifier,
   resolveIdentifierFromParams,
 } from "@/lib/routes";
@@ -106,6 +114,24 @@ export function Reader() {
 
   useTravelKeys(ready && !loading && !!identifier, onMove);
 
+  const onCoordCommit = useCallback(
+    (kind: CoordKind, value: number) => {
+      if (!params.room || !page) return;
+      const next = {
+        roomKey: decodeURIComponent(params.room),
+        wall: Number(page.wall),
+        shelf: Number(page.shelf),
+        book: Number(page.book),
+        page: Number(page.page),
+        [kind]: value,
+      };
+      navigate(bookPath(next), {
+        state: searchQuery ? { searchQuery } : undefined,
+      });
+    },
+    [params.room, page, navigate, searchQuery]
+  );
+
   const roomShort = page ? shortenRoom(page.room) : "…";
 
   let pageNodes: ReactNode = null;
@@ -123,16 +149,40 @@ export function Reader() {
           key={hudKey}
           className="hud-animate flex flex-wrap items-baseline justify-between gap-3 border-b border-[var(--line)] pb-4"
         >
-          <div className="font-mono text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+          <div className="flex flex-wrap items-baseline gap-x-0 font-mono text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
             <span className="text-[var(--mark)]">{roomShort}</span>
             <span className="text-[var(--dim)]"> · </span>
-            W{page?.wall ?? "—"}
+            <CoordPicker
+              kind="wall"
+              value={page ? Number(page.wall) : null}
+              max={WALLS}
+              disabled={!page}
+              onCommit={(v) => onCoordCommit("wall", v)}
+            />
             <span className="text-[var(--dim)]"> · </span>
-            S{page?.shelf ?? "—"}
+            <CoordPicker
+              kind="shelf"
+              value={page ? Number(page.shelf) : null}
+              max={SHELVES}
+              disabled={!page}
+              onCommit={(v) => onCoordCommit("shelf", v)}
+            />
             <span className="text-[var(--dim)]"> · </span>
-            B{page?.book ?? "—"}
+            <CoordPicker
+              kind="book"
+              value={page ? Number(page.book) : null}
+              max={BOOKS}
+              disabled={!page}
+              onCommit={(v) => onCoordCommit("book", v)}
+            />
             <span className="text-[var(--dim)]"> · </span>
-            P{page?.page ?? "—"}
+            <CoordPicker
+              kind="page"
+              value={page ? Number(page.page) : null}
+              max={PAGES}
+              disabled={!page}
+              onCommit={(v) => onCoordCommit("page", v)}
+            />
           </div>
           <div className="flex flex-wrap gap-2">
             {searchQuery && (
