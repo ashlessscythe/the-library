@@ -29,7 +29,7 @@ const PREFIX: Record<CoordKind, string> = {
 /** Match Reader HUD mono xs row height. */
 const ITEM_H = 18;
 const VISIBLE = 3;
-const GAP = 6;
+const PAD_Y = 4;
 const EDGE = 8;
 
 type CoordPickerProps = {
@@ -43,37 +43,31 @@ type CoordPickerProps = {
 type FloatPos = {
   top: number;
   left: number;
-  transformOrigin: string;
-  placement: "below" | "above";
+  width: number;
+  height: number;
+  /** Pixel offset of the trigger center inside the float (transform-origin). */
+  originX: number;
+  originY: number;
 };
 
-function measureFloat(
-  trigger: DOMRect,
-  floatW: number,
-  floatH: number
-): FloatPos {
+function measureFloat(trigger: DOMRect, floatW: number, floatH: number): FloatPos {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
 
-  let top = trigger.bottom + GAP;
-  let placement: "below" | "above" = "below";
-  if (top + floatH > vh - EDGE && trigger.top - GAP - floatH >= EDGE) {
-    top = trigger.top - GAP - floatH;
-    placement = "above";
-  }
-  // Still clamp if the viewport is very short.
-  top = Math.min(Math.max(EDGE, top), Math.max(EDGE, vh - floatH - EDGE));
-
+  // Center the float on the clicked label so the active row sits on top of it.
+  let top = trigger.top + trigger.height / 2 - floatH / 2;
   let left = trigger.left + trigger.width / 2 - floatW / 2;
+
+  top = Math.min(Math.max(EDGE, top), Math.max(EDGE, vh - floatH - EDGE));
   left = Math.min(Math.max(EDGE, left), Math.max(EDGE, vw - floatW - EDGE));
 
-  const originX = trigger.left + trigger.width / 2 - left;
-  const originY = placement === "below" ? 0 : floatH;
   return {
     top,
     left,
-    transformOrigin: `${originX}px ${originY}px`,
-    placement,
+    width: floatW,
+    height: floatH,
+    originX: trigger.left + trigger.width / 2 - left,
+    originY: trigger.top + trigger.height / 2 - top,
   };
 }
 
@@ -93,12 +87,12 @@ export function CoordPicker({
   const label = LABELS[kind];
   const display = value == null ? "—" : String(value);
 
-  // Width tracks longest label for this kind (e.g. P410).
+  // Wide enough for e.g. "P410" with HUD letter-spacing.
   const floatW = Math.max(
-    44,
-    Math.ceil(`${prefix}${max}`.length * 9.5 + 16)
+    48,
+    Math.ceil(`${prefix}${max}`.length * 11 + 20)
   );
-  const floatH = VISIBLE * ITEM_H + 8; // padding
+  const floatH = VISIBLE * ITEM_H + PAD_Y * 2;
 
   const reposition = useCallback(() => {
     const el = triggerRef.current;
@@ -138,8 +132,7 @@ export function CoordPicker({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
-    // Focus wheel after paint so keyboard/scroll works immediately.
+    if (!open || !pos) return;
     const id = window.requestAnimationFrame(() => {
       floatRef.current
         ?.querySelector<HTMLElement>(".wheel-picker-scroller")
@@ -169,12 +162,15 @@ export function CoordPicker({
           "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--mark)]",
           "disabled:pointer-events-none disabled:opacity-40",
           "active:scale-95",
-          open && "text-[var(--mark)]"
+          open && "coord-trigger--open text-[var(--mark)]"
         )}
         onClick={() => setOpen((v) => !v)}
       >
-        {prefix}
-        {display}
+        {/* Keep layout space while open; float draws on top of this label. */}
+        <span className={cn(open && "opacity-0")}>
+          {prefix}
+          {display}
+        </span>
       </button>
 
       {open &&
@@ -186,7 +182,6 @@ export function CoordPicker({
               aria-label="Dismiss picker"
               className="coord-dismiss fixed inset-0 z-40 cursor-default bg-transparent"
               onClick={() => {
-                // Tap-away keeps the scrolled value (iOS-like), Escape cancels.
                 if (value != null && draft !== value) confirm(draft);
                 else setOpen(false);
               }}
@@ -195,19 +190,14 @@ export function CoordPicker({
               ref={floatRef}
               role="dialog"
               aria-label={`${label} picker`}
-              className={cn(
-                "coord-float fixed z-50 border border-[var(--line)] bg-[var(--panel)]",
-                pos.placement === "below"
-                  ? "coord-float--below"
-                  : "coord-float--above"
-              )}
+              className="coord-float fixed z-50"
               style={
                 {
                   top: pos.top,
                   left: pos.left,
-                  width: floatW,
-                  transformOrigin: pos.transformOrigin,
-                  ["--coord-float-w" as string]: `${floatW}px`,
+                  width: pos.width,
+                  height: pos.height,
+                  transformOrigin: `${pos.originX}px ${pos.originY}px`,
                 } as CSSProperties
               }
             >
