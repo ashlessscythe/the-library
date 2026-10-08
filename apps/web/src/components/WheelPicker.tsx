@@ -138,8 +138,6 @@ export function WheelPicker({
     onPick?.(next);
   };
 
-  const pressY = useRef<number | null>(null);
-
   return (
     <div
       className={cn("wheel-picker relative select-none", className)}
