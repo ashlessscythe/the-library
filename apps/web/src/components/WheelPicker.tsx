@@ -183,26 +183,9 @@ export function WheelPicker({
                   opacity,
                 } as CSSProperties
               }
-              onPointerDown={(e) => {
-                pressY.current = e.clientY;
-              }}
-              onPointerUp={(e) => {
-                // Tap selects; a drag/scroll does not.
-                if (
-                  pressY.current != null &&
-                  Math.abs(e.clientY - pressY.current) < 8
-                ) {
-                  e.preventDefault();
-                  selectValue(n);
-                }
-                pressY.current = null;
-              }}
-              onPointerCancel={() => {
-                pressY.current = null;
-              }}
               onClick={(e) => {
-                // Keyboard / accessibility activation.
                 e.preventDefault();
+                e.stopPropagation();
                 selectValue(n);
               }}
             >
