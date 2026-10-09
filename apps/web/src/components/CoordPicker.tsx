@@ -26,13 +26,13 @@ const PREFIX: Record<CoordKind, string> = {
   page: "P",
 };
 
-/** Match Reader HUD mono xs row height. */
-const ITEM_H = 18;
+/** Slightly larger than HUD text so the wheel is easy to read/tap. */
+const ITEM_H = 26;
 /** One value above the selection, three below. */
 const ROWS_ABOVE = 1;
 const ROWS_BELOW = 3;
 const VISIBLE = ROWS_ABOVE + 1 + ROWS_BELOW;
-const PAD_Y = 4;
+const PAD_Y = 6;
 const EDGE = 8;
 
 type CoordPickerProps = {
@@ -96,8 +96,8 @@ export function CoordPicker({
   const display = value == null ? "—" : String(value);
 
   const floatW = Math.max(
-    48,
-    Math.ceil(`${prefix}${max}`.length * 11 + 20)
+    64,
+    Math.ceil(`${prefix}${max}`.length * 14 + 28)
   );
   const floatH = VISIBLE * ITEM_H + PAD_Y * 2;
   const selectionOffsetY = PAD_Y + ROWS_ABOVE * ITEM_H;
