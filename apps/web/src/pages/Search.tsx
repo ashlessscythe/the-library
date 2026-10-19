@@ -6,13 +6,12 @@ import { useLibraryEngine } from "@/hooks/useLibraryEngine";
 import { bookPathFromIdentifier } from "@/lib/routes";
 import { sanitizeSearchQuery } from "@/lib/searchText";
 
-type Mode = "empty" | "emptybook" | "chars" | "space";
+type Mode = "empty" | "emptybook" | "chars";
 
 const modes: { id: Mode; label: string; hint: string }[] = [
   { id: "empty", label: "Empty page", hint: "Query on a random page; rest noise" },
   { id: "emptybook", label: "Empty book", hint: "Query at the start; rest spaces" },
   { id: "chars", label: "Random chars", hint: "Query at a random offset" },
-  { id: "space", label: "Space pad", hint: "Deterministic discovery pad" },
 ];
 
 export function Search() {

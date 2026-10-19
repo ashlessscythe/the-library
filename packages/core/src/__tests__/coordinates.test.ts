@@ -20,7 +20,7 @@ import {
 } from "../coordinates/identifier";
 import { parseBase32, toBase32Padded } from "../mathematics/base32";
 import { parseNumbersFile } from "../mathematics/numbers";
-import { buildEmptyBookContent, buildSpacePaddedBook } from "../search/build";
+import { buildEmptyBookContent } from "../search/build";
 
 describe("constants", () => {
   it("keeps babel-v3 geometry", () => {
@@ -116,12 +116,6 @@ describe("search builders", () => {
     const book = buildEmptyBookContent("hello");
     expect(book).toHaveLength(BOOK_LENGTH);
     expect(book.startsWith("hello")).toBe(true);
-  });
-
-  it("space-padded discovery is deterministic", () => {
-    expect(buildSpacePaddedBook("tony", 1).book).toBe(
-      buildSpacePaddedBook("tony", 1).book
-    );
   });
 });
 

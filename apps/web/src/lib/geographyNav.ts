@@ -12,6 +12,35 @@ export type GeographyLocationState = {
 export const GEOGRAPHY_NAV_ROOM_LENGTH = 4;
 
 /**
+ * Reader book URLs look like:
+ * `/book/:roomKey/wall/:wall/shelf/:shelf/book/:book/page/:page`
+ * Returns the decoded room segment, or null when not on a Reader route.
+ */
+export function readerRoomKeyFromPathname(pathname: string): string | null {
+  const match = pathname.match(
+    /^\/book\/([^/]+)\/wall\/[^/]+\/shelf\/[^/]+\/book\/[^/]+\/page\/[^/]+\/?$/
+  );
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
+
+/**
+ * Geography location state for the site header link.
+ * On the Reader, reuse the current room; elsewhere open a random short room.
+ */
+export function geographyNavStateForPath(
+  pathname: string
+): GeographyLocationState {
+  const roomKey = readerRoomKeyFromPathname(pathname);
+  if (roomKey) return { roomKey };
+  return { roomKey: randomGeographyNavRoom() };
+}
+
+/**
  * Random Babel room string of a fixed length (crypto-uniform base-32 digits).
  * Leading digit is never `0`, matching {@link randomRoomString} from core.
  */

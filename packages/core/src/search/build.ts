@@ -109,28 +109,3 @@ export function buildRandomCharsBookContent(
     highlight: getHighlightPos(randomStartPosition, noLineBreaks.length),
   };
 }
-
-/**
- * Deterministic discovery helper (new — not upstream).
- * Places sanitized text at the start of the given page; rest spaces.
- */
-export function buildSpacePaddedBook(
-  content: string,
-  page = 1
-): { book: string; page: number } {
-  const sanitized = content
-    .toLowerCase()
-    .replace(/\r/g, "")
-    .replace(/\n/g, " ")
-    .split("")
-    .map((c) => (allowed.has(c) ? c : " "))
-    .join("");
-
-  const pageStart = (page - 1) * PAGE_LENGTH;
-  const bookArr = new Array(BOOK_LENGTH).fill(" ");
-  const max = Math.min(sanitized.length, PAGE_LENGTH);
-  for (let i = 0; i < max; i++) {
-    bookArr[pageStart + i] = sanitized[i];
-  }
-  return { book: bookArr.join(""), page };
-}

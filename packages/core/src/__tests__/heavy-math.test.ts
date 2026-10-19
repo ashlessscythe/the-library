@@ -19,7 +19,7 @@ import {
   loadNumbersFromHexJson,
   loadNumbersFromString,
 } from "../mathematics/numbers";
-import { buildEmptyBookContent, buildSpacePaddedBook } from "../search/build";
+import { buildEmptyBookContent } from "../search/build";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const hexPath = path.resolve(here, "../../data/numbers.hex.json");
@@ -45,15 +45,6 @@ describe("heavy library math (babel-v3 numbers)", () => {
     const identifier = lookupContent(book, 1);
     const regenerated = generateContent(identifier, true);
     expect(regenerated.content).toBe(book);
-  }, 600_000);
-
-  it("space-padded discovery is stable across lookups", () => {
-    const { book, page } = buildSpacePaddedBook("tony", 1);
-    const id1 = lookupContent(book, page);
-    const id2 = lookupContent(book, page);
-    expect(id1).toBe(id2);
-    const pageContent = generateContent(id1, false);
-    expect(pageContent.content.startsWith("tony")).toBe(true);
   }, 600_000);
 
   it("page 1 of book 1.1.1.1 has PAGE_LENGTH characters", () => {
