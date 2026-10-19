@@ -91,7 +91,7 @@ export function useLibraryEngine() {
   const search = useCallback(
     async (
       content: string,
-      mode: "empty" | "emptybook" | "chars" | "space"
+      mode: "empty" | "emptybook" | "chars"
     ) => {
       await ensureInit();
       return call<{ identifier: string; highlight: unknown }>({

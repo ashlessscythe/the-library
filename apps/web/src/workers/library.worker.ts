@@ -4,7 +4,6 @@ import {
   buildEmptyBookContent,
   buildEmptyPageBookContent,
   buildRandomCharsBookContent,
-  buildSpacePaddedBook,
   type MoveDirection,
   type PageContent,
   type PhysicalDirection,
@@ -42,7 +41,7 @@ export type WorkerRequest =
       id: number;
       type: "search";
       content: string;
-      mode: "empty" | "emptybook" | "chars" | "space";
+      mode: "empty" | "emptybook" | "chars";
     }
   | { id: number; type: "move"; identifier: string; direction: MoveDirection }
   | { id: number; type: "random" }
@@ -93,10 +92,6 @@ async function handleMessage(msg: WorkerRequest): Promise<void> {
           book = built.book;
           highlight = built.highlight;
           page = Math.floor(built.highlight.startLine / 40) + 1;
-        } else if (msg.mode === "space") {
-          const built = buildSpacePaddedBook(content, 1);
-          book = built.book;
-          page = built.page;
         } else {
           const built = buildEmptyPageBookContent(content);
           book = built.book;
