@@ -13,6 +13,8 @@ const webDist = path.resolve(__dirname, "../../web/dist");
 
 /** In-memory hash → room store (replace with Neon later). */
 const roomStore = new Map<string, string>();
+const MAX_ROOM_LENGTH = 4096;
+const MAX_STORE_SIZE = 100_000;
 
 function normalizeRoom(room: string): string {
   let r = room.toLowerCase();
@@ -42,9 +44,21 @@ app.use(
 app.get("/api/health", (c) => c.json({ ok: true }));
 
 app.post("/api/rooms", async (c) => {
-  const body = await c.req.json<{ room?: string }>();
-  if (!body.room || !/^[0-9a-v]+$/i.test(body.room)) {
+  let body: { room?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  if (
+    typeof body.room !== "string" ||
+    body.room.length > MAX_ROOM_LENGTH ||
+    !/^[0-9a-v]+$/i.test(body.room)
+  ) {
     return c.json({ error: "Invalid room" }, 400);
+  }
+  if (roomStore.size >= MAX_STORE_SIZE) {
+    return c.json({ error: "Room store full" }, 507);
   }
   const room = normalizeRoom(body.room);
   const hash = hashRoom(room);
